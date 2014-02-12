@@ -18,6 +18,7 @@ library
     ivory
   exposed-modules:
     Ivory.Compile.ACL2,
+    Ivory.Compile.ACL2.ACL2,
     Ivory.Compile.ACL2.CPS,
     Ivory.Compile.ACL2.CPSConvert,
     Ivory.Compile.ACL2.SExpr

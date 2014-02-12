@@ -26,6 +26,7 @@ data BValue
   = Intrinsic   Intrinsic [SValue]
   | Deref       SValue
   | SValue      SValue
+  | Pair        SValue SValue
   deriving Show
 
 -- | Intrinsics.
