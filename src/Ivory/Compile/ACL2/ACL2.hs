@@ -25,7 +25,6 @@ data Expr
   | Ge      Expr Expr
   | Lt      Expr Expr
   | Le      Expr Expr
-  | Mux     Expr Expr Expr
 
 instance Show Expr where show = show . sExpr
 
