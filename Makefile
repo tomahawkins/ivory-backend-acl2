@@ -2,7 +2,7 @@
 all: Factorial.hs dist/setup-config
 	runhaskell -W Factorial.hs
 
-dist/setup-config: src/Ivory/Compile/ACL2.hs
+dist/setup-config: src/Ivory/Compile/ACL2.hs src/Ivory/Compile/ACL2/*.hs
 	cabal build
 	cabal install
 

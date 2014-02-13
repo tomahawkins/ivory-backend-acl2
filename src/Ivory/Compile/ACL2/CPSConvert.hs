@@ -16,6 +16,7 @@ cpsConvertProc :: I.Proc -> Proc
 cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) cont
   where
   (cont, _) = runId $ runStateT (0, 0) $ cpsStmts (I.procBody p) Halt
+  --XXX Convert pre and post conditions into assertions.
 
 type CPS = StateT (Int, Int) Id
 
@@ -83,11 +84,11 @@ cpsStmts a cont = case a of
       -- XXX Should rewrite loops into forevers with breaks.
       I.Loop v i incr block -> cpsExpr i $ \ i -> cpsExpr to $ \ to -> do
         loop <- withLoop $ cpsStmts block Halt
-        return $ Push cont $ Loop (varSym v) i dir to loop cont
+        return $ Push cont $ Loop (varSym v) i up to loop cont
         where
-        (dir, to) = case incr of
-          I.IncrTo to -> (Incr, to)
-          I.DecrTo to -> (Decr, to)
+        (up, to) = case incr of
+          I.IncrTo to -> (True , to)
+          I.DecrTo to -> (False, to)
       I.RefCopy  _ _ _ -> error "RefCopy not supported."
       I.AllocRef _ _ _ -> error "AllocRef not supported."
       I.Local _ _ I.InitZero -> error "Local _ _ InitZero not supported."

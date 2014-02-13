@@ -30,7 +30,7 @@ instance Show Expr where show = show . sExpr
 
 sExpr :: Expr -> SExpr
 sExpr a = case a of
-  Defun   name args body -> SA [SV name, SA $ map SV args, sExpr body]
+  Defun   name args body -> SA [SV "defun", SV name, SA $ map SV args, sExpr body]
   Cons    a b -> f2 "cons" a b
   Car     a   -> f1 "car" a
   Cdr     a   -> f1 "cdr" a

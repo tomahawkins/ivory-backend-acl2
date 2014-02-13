@@ -14,6 +14,8 @@ acl2Convert (Proc name args body) = A.Defun name args $ acl2Cont (zip args $ map
 acl2Cont :: [(Sym, A.Expr)] -> Cont -> A.Expr
 acl2Cont env a = case a of
   Let     a b c -> A.Let' [(a, acl2BValue b)] $ acl2Cont ((a, acl2BValue b) : env) c
+  --Let     a b c -> A.Cons (A.Lit "0") $ A.Cons (A.Cons (A.Lit $ show a) (acl2BValue b)) $ acl2Cont c  --A.Let' [(a, acl2BValue b)] $ acl2Cont ((a, acl2BValue b) : env) c
+  --_ -> A.Lit "nil"
   a -> error $ "Continuation not supported yet: " ++ show a
 {-
   = Call    Sym [SValue]       -- ^ Function call.
@@ -36,13 +38,12 @@ acl2BValue a = case a of
   Intrinsic   a args -> acl2Intrinsic a $ map acl2SValue args
   SValue      a -> acl2SValue a
   Deref _   -> error "acl2: Deref not supported."
-  Pair  _ _ -> error "acl2: Pair not supported."
 
 acl2SValue :: SValue -> A.Expr
 acl2SValue a = case a of
-  Sym a -> A.Var a
-  ReturnValue -> A.Var "retval"
-  Literal a -> case a of
+  Sym a       -> A.Lit $ show a
+  ReturnValue -> A.Lit $ show "retval"
+  Literal a   -> case a of
     I.LitInteger a     -> A.Lit $ show a
     I.LitFloat   a     -> A.Lit $ show a
     I.LitDouble  a     -> A.Lit $ show a
