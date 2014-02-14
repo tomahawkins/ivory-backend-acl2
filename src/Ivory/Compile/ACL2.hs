@@ -8,6 +8,7 @@ import Text.Printf
 
 import Ivory.Compile.ACL2.ACL2Convert
 import Ivory.Compile.ACL2.CPSConvert
+import Ivory.Compile.ACL2.RTLConvert
 import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Language.Syntax.Names
 import Ivory.Language.Syntax.Type
@@ -16,8 +17,9 @@ compileModule :: I.Module -> IO ()
 compileModule m = do
   putStrLn $ showModule m
   mapM_ (putStrLn . showProc) $ procs m
-  mapM_ (putStrLn . show . cpsConvertProc) $ procs m 
-  mapM_ (putStrLn . show . acl2Convert . cpsConvertProc) $ procs m 
+  let rtl = rtlConvert $ map cpsConvertProc $ procs m 
+  print rtl
+  print $ acl2Convert rtl
 
 showModule :: I.Module -> String
 showModule m = unlines

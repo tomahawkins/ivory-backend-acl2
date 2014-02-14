@@ -3,51 +3,94 @@ module Ivory.Compile.ACL2.CPS
   ( Proc      (..)
   , SValue    (..)
   , BValue    (..)
-  , Intrinsic (..)
+  , Literal   (..)
   , Cont      (..)
+  , Var
+  , contFreeVars
   ) where
 
-import qualified Ivory.Language.Syntax.AST as I
-import Ivory.Language.Syntax.Names
+import Data.List (nub)
+
+type Var = String
 
 -- | A procedure is a name, a list of arguments, and its continuation (body).
-data Proc = Proc Sym [Sym] Cont deriving Show
+data Proc a = Proc Var [Var] (Cont a) deriving Show
 
--- | Small values are either variables or constants.
+-- | Small values are simple enough to become registers.
 data SValue
-  = Sym Sym             -- ^ A variable reference.
-  | Literal I.Literal   -- ^ A literal constant.
+  = Var Var             -- ^ A variable reference.
   | ReturnValue         -- ^ The return value of a function.
   deriving Show
 
 -- | Big values are more complicated expressions used in let binding.
-data BValue
-  = Intrinsic   Intrinsic [SValue]  -- ^ Apply an intrinsic to a list of arguments.
-  | Deref       SValue              -- ^ Dereference a pointer.
-  | SValue      SValue              -- ^ An SValue.
+data BValue a
+  = SValue    SValue      -- ^ An SValue.
+  | Literal   Literal     -- ^ A constant.
+  | Deref     SValue      -- ^ Dereferences a pointer.
+  | Intrinsic a [SValue]  -- ^ An application of an intrinsic to a list of arguments.
   deriving Show
 
--- | Intrinsics.
-data Intrinsic
-  = IntrinsicOp I.ExpOp        -- ^ At this point, intrinsics are the Ivory operators.
+-- | Literals.
+data Literal
+  = LitInteger Integer
+  | LitFloat Float
+  | LitDouble Double
+  | LitChar Char
+  | LitBool Bool
+  | LitNull
+  | LitString String
   deriving Show
 
 -- | Continuations.
-data Cont
-  = Call    Sym [SValue]       -- ^ Function call, given the function name and arguments.
-  | Push    Cont Cont          -- ^ Push a continuation onto the stack.
-  | Pop     Cont               -- ^ Pop a continuation off the stack and throw it away. 
-  | Return  (Maybe SValue)     -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
-  | Let     Sym BValue Cont    -- ^ Brings a new variable into scope and assigns it a value.
-  | If      SValue Cont Cont   -- ^ Conditionally follow one continuation or another.
-  | Assert  SValue Cont        -- ^ Assert a value and continue.
-  | Assume  SValue Cont        -- ^ State an assumption and continue.
-  | Store   SValue SValue Cont -- ^ Store a value and continue.
-  | Assign  Sym SValue Cont    -- ^ Assign a value and continue.
-  | Forever Cont               -- ^ Loop forever on this continuation.
-  | Loop    Sym SValue Bool SValue Cont Cont  -- ^ Loop a fixed number of times with a looping variable.
-  | Halt                       -- ^ End the program or loop.
+data Cont a
+  = Halt                               -- ^ End the program or loop.
+  | Call    Var [SValue]               -- ^ Function call, given the function name and arguments.
+  | Push    (Cont a) (Cont a)          -- ^ Push a continuation onto the stack.
+  | Pop     (Cont a)                   -- ^ Pop a continuation off the stack and throw it away. 
+  | Return  (Maybe SValue)             -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
+  | Let     Var (BValue a) (Cont a)    -- ^ Brings a new variable into scope and assigns it a value.
+  | If      SValue (Cont a) (Cont a)   -- ^ Conditionally follow one continuation or another.
+  | Assert  SValue (Cont a)            -- ^ Assert a value and continue.
+  | Assume  SValue (Cont a)            -- ^ State an assumption and continue.
+  | Store   SValue SValue (Cont a)     -- ^ Store a value and continue.
+  | Forever (Cont a)                   -- ^ Loop forever on this continuation.
+  | Loop    Var SValue Bool SValue (Cont a) (Cont a)  -- ^ Loop a fixed number of times with a looping variable.
   deriving Show
+
+-- | All free (unbound) variables in a continuation.
+contFreeVars :: Cont a -> [Var]
+contFreeVars = nub . cont []
+  where
+  cont :: [Var] -> Cont a -> [Var]
+  cont i a = case a of
+    Call    _ args        -> concatMap sValue args
+    Push    a b           -> cont i a ++ cont i b
+    Pop     a             -> cont i a
+    Return (Just (Var a)) -> [a]
+    Return _              -> []
+    Let     a b c         -> bVars ++ cont (a : i) c
+      where
+      bVars = case b of
+        SValue    a       -> sValue a
+        Literal   _       -> []
+        Deref     a       -> sValue a
+        Intrinsic _ args  -> concatMap sValue args
+    If      a b c -> sValue a ++ cont i b ++ cont i c
+    Halt          -> []
+    Assert  a b   -> sValue a ++ cont i b
+    Assume  a b   -> sValue a ++ cont i b
+    Store   a b c -> sValue a ++ sValue b ++ cont i c
+    Forever a     -> cont i a
+    Loop    a b _ c d e -> sValue b ++ sValue c ++ cont (a : i) d ++ cont i e
+    where
+    sValue :: SValue -> [Var]
+    sValue a = case a of
+      Var a
+        | elem a i -> []
+        | otherwise -> [a]
+      _     -> []
+
+
 
 {-
 
@@ -89,23 +132,6 @@ Would ACL2 be smart enough to tie this information back to the larger program?
 Or would the compiled programs return all the assertions collect throughout the execution,
 which ACL2 would verify independently?  But this would still happen under one defthm,
 so I'm not sure how the various assertions would serve as lemmas for larger proofs.
-
-
-Q: Is it possible to do CPS interpretation in ACL2?
-
-Instead of direct compilation to ACL2, would it be better use an interpreter
-approach, i.e.  write and CPS IR interpreter in ACL2, then feed it a generated CPS IR program?
-
-How could you write an CPS interpreter in ACL2, which would clearly be nonterminating? 
-Force it to halt after a million instructions?
-
-Would this make verification any easier?
-
-
-Q: Is CPS appropriate?
-
-CPS is a good IR for optimization and compiling to assembly.
-Is it appropriate for verification or would another IR be a better choice?
 
 -}
 

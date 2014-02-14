@@ -22,6 +22,8 @@ library
     Ivory.Compile.ACL2.ACL2Convert,
     Ivory.Compile.ACL2.CPS,
     Ivory.Compile.ACL2.CPSConvert,
+    Ivory.Compile.ACL2.RTL,
+    Ivory.Compile.ACL2.RTLConvert,
     Ivory.Compile.ACL2.SExpr
   hs-source-dirs: src
   ghc-options: -W

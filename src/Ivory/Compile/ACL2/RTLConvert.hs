@@ -1,24 +1,24 @@
--- | Compile CPS to ACL2.
-module Ivory.Compile.ACL2.ACL2Convert
-  ( acl2Convert
+-- | Compile CPS to RTL.
+module Ivory.Compile.ACL2.RTLConvert
+  ( rtlConvert
   ) where
 
-import Data.List (nub)
-import MonadLib
+--import Data.List (nub)
+--import MonadLib
 
-import Ivory.Compile.ACL2.ACL2
-import qualified Ivory.Compile.ACL2.RTL as R
-import Ivory.Language.Syntax.AST (ExpOp (..))
+--import qualified Ivory.Compile.ACL2.CPS as C
+import Ivory.Compile.ACL2.CPS
+import Ivory.Compile.ACL2.RTL
 
-acl2Convert :: R.Program ExpOp -> Expr
-acl2Convert _ = undefined -- A.Defun name args $ acl2Cont (zip args $ map A.Var args) body
+-- | Convert a list of CPS procedures to an RTL program.
+rtlConvert :: [Proc a] -> Program a
+rtlConvert procs = undefined
 
-{-
-type CC = StateT [A.Expr] Id
+--type CC = StateT [A.Expr] Id
 
-acl2Cont :: Cont -> CC (Var, [Var])
-acl2Cont a = case a of
--}
+
+--acl2Cont :: Cont -> CC (Var, [Var])
+--acl2Cont a = case a of
   {-
   Let  a b c -> do
     (c, cArgs) <- acl2Cont c
@@ -63,8 +63,8 @@ acl2SValue a = case a of
   Var a       -> A.Var a
   ReturnValue -> A.Var "retval"
 
-acl2Intrinsic :: I.ExpOp -> [A.Expr] -> A.Expr
-acl2Intrinsic a args = case (a, args) of
+acl2Intrinsic :: Intrinsic -> [A.Expr] -> A.Expr
+acl2Intrinsic (IntrinsicOp a) args = case (a, args) of
   (I.ExpEq _,        [a, b]) -> A.Equal a b
   (I.ExpNeq _,       [a, b]) -> A.Not $ A.Equal a b
   (I.ExpGt False _,  [a, b]) -> A.Gt  a b
@@ -79,35 +79,4 @@ acl2Intrinsic a args = case (a, args) of
   (I.ExpCond,     [a, b, c]) -> A.If  a b c
   a -> error $ "Intrinsic not supported yet: " ++ show a
 
--- | All free (unbound) variables in a continuation.
-freeVars :: Cont -> [Var]
-freeVars = nub . cont []
-  where
-  cont :: [Var] -> Cont -> [Var]
-  cont i a = case a of
-    Call    _ args        -> concatMap sValue args
-    Push    a b           -> cont i a ++ cont i b
-    Pop     a             -> cont i a
-    Return (Just (Var a)) -> [a]
-    Return _              -> []
-    Let     a b c         -> bVars ++ cont (a : i) c
-      where
-      bVars = case b of
-        SValue    a       -> sValue a
-        Deref     a       -> sValue a
-        Intrinsic _ args  -> concatMap sValue args
-    If      a b c -> sValue a ++ cont i b ++ cont i c
-    Halt          -> []
-    Assert  a b   -> sValue a ++ cont i b
-    Assume  a b   -> sValue a ++ cont i b
-    Store   a b c -> sValue a ++ sValue b ++ cont i c
-    Forever a     -> cont i a
-    Loop    a b _ c d e -> sValue b ++ sValue c ++ cont (a : i) d ++ cont i e
-    where
-    sValue :: SValue -> [Var]
-    sValue a = case a of
-      Var a
-        | elem a i -> []
-        | otherwise -> [a]
-      _     -> []
 -}

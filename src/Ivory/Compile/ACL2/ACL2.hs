@@ -7,6 +7,7 @@ import Ivory.Compile.ACL2.SExpr
 
 data Expr
   = Defun   String [String] Expr
+  | MutualRecursion [Expr]
   | Cons    Expr Expr
   | Car     Expr
   | Cdr     Expr
@@ -31,6 +32,7 @@ instance Show Expr where show = show . sExpr
 sExpr :: Expr -> SExpr
 sExpr a = case a of
   Defun   name args body -> SA [SV "defun", SV name, SA $ map SV args, sExpr body]
+  MutualRecursion a -> SA $ SV "mutual-recursion" : map sExpr a
   Cons    a b -> f2 "cons" a b
   Car     a   -> f1 "car" a
   Cdr     a   -> f1 "cdr" a
