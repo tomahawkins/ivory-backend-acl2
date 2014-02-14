@@ -26,6 +26,7 @@ data Expr
   | Ge      Expr Expr
   | Lt      Expr Expr
   | Le      Expr Expr
+  | Nil
 
 instance Show Expr where show = show . sExpr
 
@@ -51,6 +52,7 @@ sExpr a = case a of
   Ge      a b -> f2 ">=" a b
   Lt      a b -> f2 "<"  a b
   Le      a b -> f2 "<=" a b
+  Nil         -> SV "nil"
   where
   f1 name a     = SA [SV name, sExpr a]
   f2 name a b   = SA [SV name, sExpr a, sExpr b]

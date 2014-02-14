@@ -7,9 +7,12 @@ module Ivory.Compile.ACL2.CPS
   , Cont      (..)
   , Var
   , contFreeVars
+  , alphaConvert
   ) where
 
-import Data.List (nub)
+import Data.List (nub, findIndex)
+import Data.Maybe (fromJust)
+import MonadLib
 
 type Var = String
 
@@ -90,6 +93,71 @@ contFreeVars = nub . cont []
         | otherwise -> [a]
       _     -> []
 
+
+
+type Alpha = StateT (Int, [(Var, Var)]) Id
+
+-- Creates a new name for an introduced variable.
+var :: Var -> Alpha Var
+var a = do
+  (i, env) <- get
+  let a' = "_alpha_" ++ show i
+  set (i + 1, (a, a') : env)
+  return a'
+
+-- Replaces variable reference with new name.
+ref :: Var -> Alpha Var
+ref a = do
+  (_, env) <- get
+  case lookup a env of
+    Nothing -> error $ "Variable not found: " ++ a
+    Just a  -> return a
+
+popVar :: Var -> Alpha ()
+popVar a = do
+  (i, env) <- get
+  let n = fromJust $ findIndex ((== a) . snd) env
+  set (i, take n env ++ tail (drop n env))
+
+-- | Alpha conversion makes all variables unique.
+alphaConvert :: [Proc i] -> [Proc i]
+alphaConvert procs = fst $ runId $ runStateT (0, []) $ mapM proc procs
+  where
+  proc :: Proc i -> Alpha (Proc i)
+  proc (Proc name args body) = do
+    (i, _) <- get
+    set (i, [])
+    args <- mapM var args
+    body <- cont body
+    return $ Proc name args body
+
+  cont :: Cont i -> Alpha (Cont i)
+  cont a = case a of
+    Call    f args        -> mapM sValue args >>= return . Call f
+    Push    a b           -> do { a <- cont a; b <- cont b; return $ Push a b }
+    Pop     a             -> do { a <- cont a; return $ Pop a }
+    Return  (Just a)      -> do { a <- sValue a; return $ Return $ Just a }
+    Return  Nothing       -> return $ Return Nothing
+    Let     a b c         -> do { b <- bValue b; a <- var a; c <- cont c; return $ Let a b c }
+      where
+      bValue :: BValue i -> Alpha (BValue i)
+      bValue a = case a of
+        SValue    a    -> do { a <- sValue a; return $ SValue a }
+        Literal   a    -> return $ Literal a
+        Deref     a    -> do { a <- sValue a; return $ Deref a }
+        Intrinsic i a  -> do { a <- mapM sValue a; return $ Intrinsic i a }
+    If      a b c -> do { a <- sValue a; b <- cont b; c <- cont c; return $ If a b c }
+    Halt          -> return Halt
+    Assert  a b   -> do { a <- sValue a; b <- cont b; return $ Assert a b }
+    Assume  a b   -> do { a <- sValue a; b <- cont b; return $ Assume a b }
+    Store   a b c -> do { a <- sValue a; b <- sValue b; c <- cont c; return $ Store a b c }
+    Forever a     -> do { a <- cont a; return $ Forever a }
+    Loop    a b c d e f -> do { b <- sValue b; d <- sValue d; a <- var a; e <- cont e; popVar a; f <- cont f; return $ Loop a b c d e f }
+
+  sValue :: SValue -> Alpha SValue
+  sValue a = case a of
+    Var a -> ref a >>= return . Var
+    a -> return a
 
 
 {-

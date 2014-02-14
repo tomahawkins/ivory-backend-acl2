@@ -3,15 +3,12 @@ module Ivory.Compile.ACL2.ACL2Convert
   ( acl2Convert
   ) where
 
-import Data.List (nub)
-import MonadLib
-
 import Ivory.Compile.ACL2.ACL2
 import qualified Ivory.Compile.ACL2.RTL as R
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
 acl2Convert :: R.Program ExpOp -> Expr
-acl2Convert _ = undefined -- A.Defun name args $ acl2Cont (zip args $ map A.Var args) body
+acl2Convert _ = Nil
 
 {-
 type CC = StateT [A.Expr] Id
@@ -79,35 +76,4 @@ acl2Intrinsic a args = case (a, args) of
   (I.ExpCond,     [a, b, c]) -> A.If  a b c
   a -> error $ "Intrinsic not supported yet: " ++ show a
 
--- | All free (unbound) variables in a continuation.
-freeVars :: Cont -> [Var]
-freeVars = nub . cont []
-  where
-  cont :: [Var] -> Cont -> [Var]
-  cont i a = case a of
-    Call    _ args        -> concatMap sValue args
-    Push    a b           -> cont i a ++ cont i b
-    Pop     a             -> cont i a
-    Return (Just (Var a)) -> [a]
-    Return _              -> []
-    Let     a b c         -> bVars ++ cont (a : i) c
-      where
-      bVars = case b of
-        SValue    a       -> sValue a
-        Deref     a       -> sValue a
-        Intrinsic _ args  -> concatMap sValue args
-    If      a b c -> sValue a ++ cont i b ++ cont i c
-    Halt          -> []
-    Assert  a b   -> sValue a ++ cont i b
-    Assume  a b   -> sValue a ++ cont i b
-    Store   a b c -> sValue a ++ sValue b ++ cont i c
-    Forever a     -> cont i a
-    Loop    a b _ c d e -> sValue b ++ sValue c ++ cont (a : i) d ++ cont i e
-    where
-    sValue :: SValue -> [Var]
-    sValue a = case a of
-      Var a
-        | elem a i -> []
-        | otherwise -> [a]
-      _     -> []
 -}

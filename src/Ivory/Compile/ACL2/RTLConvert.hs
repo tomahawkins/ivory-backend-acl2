@@ -3,18 +3,25 @@ module Ivory.Compile.ACL2.RTLConvert
   ( rtlConvert
   ) where
 
---import Data.List (nub)
---import MonadLib
+import Data.List
 
---import qualified Ivory.Compile.ACL2.CPS as C
 import Ivory.Compile.ACL2.CPS
-import Ivory.Compile.ACL2.RTL
+import Ivory.Compile.ACL2.RTL hiding (RTL, Var)
+import qualified Ivory.Compile.ACL2.RTL as R
+
+type RTL i = R.RTL () i
 
 -- | Convert a list of CPS procedures to an RTL program.
-rtlConvert :: [Proc a] -> Program a
-rtlConvert procs = undefined
+rtlConvert :: [Proc i] -> Program i
+rtlConvert = elaborate () . mapM_ proc . alphaConvert
 
---type CC = StateT [A.Expr] Id
+proc :: Proc i -> RTL i ()
+proc (Proc name args body) = do
+  comment $ "Procedure: " ++ name ++ "(" ++ intercalate ", " args ++ ")"
+  label name
+  return ()
+
+
 
 
 --acl2Cont :: Cont -> CC (Var, [Var])
