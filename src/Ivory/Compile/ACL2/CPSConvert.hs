@@ -68,23 +68,23 @@ cpsStmts a cont = case a of
         where
         f :: [SValue] -> [I.Expr] -> CPS (Cont I.ExpOp)
         f args a = case a of
-          [] -> return $ Push cont $ Call (nameSym fun) args 
+          [] -> return $ Call (nameSym fun) args cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
       I.Call _ (Just result) fun args -> f [] $ map tValue args
         where
         f :: [SValue] -> [I.Expr] -> CPS (Cont I.ExpOp)
         f args a = case a of
-          [] -> return $ Push (Let (varSym result) (SValue ReturnValue) cont) $ Call (nameSym fun) args 
+          [] -> return $ Call (nameSym fun) args $ Let (varSym result) (SValue ReturnValue) cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
       I.Forever a -> do
         loop <- withLoop $ cpsStmts a Halt
-        return $ Push cont $ Forever loop
+        return $ Forever loop cont
       I.Break -> do
         return $ Return Nothing
       -- XXX Should rewrite loops into forevers with breaks.
       I.Loop v i incr block -> cpsExpr i $ \ i -> cpsExpr to $ \ to -> do
         loop <- withLoop $ cpsStmts block Halt
-        return $ Push cont $ Loop (varSym v) i up to loop cont
+        return $ Loop (varSym v) i up to loop cont
         where
         (up, to) = case incr of
           I.IncrTo to -> (True , to)

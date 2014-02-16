@@ -47,8 +47,7 @@ data Literal
 -- | Continuations.
 data Cont a
   = Halt                               -- ^ End the program or loop.
-  | Call    Var [SValue]               -- ^ Function call, given the function name and arguments.
-  | Push    (Cont a) (Cont a)          -- ^ Push a continuation onto the stack.
+  | Call    Var [SValue] (Cont a)      -- ^ Push the continuation onto the stack and call a function with arguments.
   | Pop     (Cont a)                   -- ^ Pop a continuation off the stack and throw it away. 
   | Return  (Maybe SValue)             -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
   | Let     Var (BValue a) (Cont a)    -- ^ Brings a new variable into scope and assigns it a value.
@@ -56,7 +55,7 @@ data Cont a
   | Assert  SValue (Cont a)            -- ^ Assert a value and continue.
   | Assume  SValue (Cont a)            -- ^ State an assumption and continue.
   | Store   SValue SValue (Cont a)     -- ^ Store a value and continue.
-  | Forever (Cont a)                   -- ^ Loop forever on this continuation.
+  | Forever (Cont a) (Cont a)          -- ^ Loop forever on this continuation.
   | Loop    Var SValue Bool SValue (Cont a) (Cont a)  -- ^ Loop a fixed number of times with a looping variable.
   deriving Show
 
@@ -66,8 +65,7 @@ contFreeVars = nub . cont []
   where
   cont :: [Var] -> Cont a -> [Var]
   cont i a = case a of
-    Call    _ args        -> concatMap sValue args
-    Push    a b           -> cont i a ++ cont i b
+    Call    _ args a      -> concatMap sValue args ++ cont i a
     Pop     a             -> cont i a
     Return (Just (Var a)) -> [a]
     Return _              -> []
@@ -83,7 +81,7 @@ contFreeVars = nub . cont []
     Assert  a b   -> sValue a ++ cont i b
     Assume  a b   -> sValue a ++ cont i b
     Store   a b c -> sValue a ++ sValue b ++ cont i c
-    Forever a     -> cont i a
+    Forever a b   -> cont i a ++ cont i b
     Loop    a b _ c d e -> sValue b ++ sValue c ++ cont (a : i) d ++ cont i e
     where
     sValue :: SValue -> [Var]
@@ -133,12 +131,11 @@ alphaConvert procs = fst $ runId $ runStateT (0, []) $ mapM proc procs
 
   cont :: Cont i -> Alpha (Cont i)
   cont a = case a of
-    Call    f args        -> mapM sValue args >>= return . Call f
-    Push    a b           -> do { a <- cont a; b <- cont b; return $ Push a b }
-    Pop     a             -> do { a <- cont a; return $ Pop a }
-    Return  (Just a)      -> do { a <- sValue a; return $ Return $ Just a }
-    Return  Nothing       -> return $ Return Nothing
-    Let     a b c         -> do { b <- bValue b; a <- var a; c <- cont c; return $ Let a b c }
+    Call    a b c    -> do { b <- mapM sValue b; c <- cont c; return $ Call a b c }
+    Pop     a        -> do { a <- cont a; return $ Pop a }
+    Return  (Just a) -> do { a <- sValue a; return $ Return $ Just a }
+    Return  Nothing  -> return $ Return Nothing
+    Let     a b c    -> do { b <- bValue b; a <- var a; c <- cont c; return $ Let a b c }
       where
       bValue :: BValue i -> Alpha (BValue i)
       bValue a = case a of
@@ -151,7 +148,7 @@ alphaConvert procs = fst $ runId $ runStateT (0, []) $ mapM proc procs
     Assert  a b   -> do { a <- sValue a; b <- cont b; return $ Assert a b }
     Assume  a b   -> do { a <- sValue a; b <- cont b; return $ Assume a b }
     Store   a b c -> do { a <- sValue a; b <- sValue b; c <- cont c; return $ Store a b c }
-    Forever a     -> do { a <- cont a; return $ Forever a }
+    Forever a b   -> do { a <- cont a; b <- cont b; return $ Forever a b }
     Loop    a b c d e f -> do { b <- sValue b; d <- sValue d; a <- var a; e <- cont e; popVar a; f <- cont f; return $ Loop a b c d e f }
 
   sValue :: SValue -> Alpha SValue

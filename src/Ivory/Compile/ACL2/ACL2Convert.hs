@@ -4,10 +4,10 @@ module Ivory.Compile.ACL2.ACL2Convert
   ) where
 
 import Ivory.Compile.ACL2.ACL2
-import qualified Ivory.Compile.ACL2.RTL as R
+import Ivory.Compile.ACL2.RTL
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
-acl2Convert :: R.Program ExpOp -> Expr
+acl2Convert :: Program ExpOp -> Expr
 acl2Convert _ = Nil
 
 {-
