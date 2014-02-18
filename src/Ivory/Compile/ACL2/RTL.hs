@@ -26,6 +26,7 @@ module Ivory.Compile.ACL2.RTL
   , intrinsic
   ) where
 
+import Data.List
 import MonadLib hiding (Label, jump)
 import Text.Printf
 
@@ -45,17 +46,17 @@ data Instruction i
   | Halt                   -- ^ Halt the program.
   | Copy      Var Var      -- ^ Copy data from one var to another.
   | Push      Var          -- ^ Push a value onto the data stack.
-  | PushCont  Label Int    -- ^ Push onto the call stack a label and the number words pushed onto the data stack.
+  | PushCont  Label        -- ^ Push onto the call stack a label and the number words pushed onto the data stack.
   | Pop       Var          -- ^ Pop a value off the stack.
-  | Const     Var Literal  -- ^ Load a literal into a var.
-  | Intrinsic i Var [Var]  -- ^ Call an intrinsic and assign result to var.
+  | Const     Literal Var  -- ^ Load a literal into a var.
+  | Intrinsic i [Var] Var  -- ^ Call an intrinsic and assign result to var.
 
 instance Show i => Show (Program i) where
   show (Program p) = unlines $ map show p
 
 instance Show i => Show (Instruction i) where
   show a = case a of
-    Comment   a     -> printf "comment %s" $ show a
+    Comment   a     -> printf "\t# %s" a
     Label     a     -> printf "%s:" a
     Return          ->        "\treturn'"
     Jump      a     -> printf "\tjump %s" a
@@ -64,10 +65,10 @@ instance Show i => Show (Instruction i) where
     Halt            ->        "\thalt"
     Copy      a b   -> printf "\tcopy %s %s" a b
     Push      a     -> printf "\tpush %s" a
-    PushCont  a b   -> printf "\tpushCont %s %d" a b
+    PushCont  a     -> printf "\tpushCont %s" a
     Pop       a     -> printf "\tpop  %s" a
-    Const     a b   -> printf "\tconst' %s %s" a (show b)
-    Intrinsic i a b -> printf "\tintrinsic %s %s %s" (show i) a (show b)
+    Const     a b   -> printf "\tconst' (%s) %s" (show a) b
+    Intrinsic i a b -> printf "\tintrinsic (%s) (%s) %s" (show i) (intercalate ", " a) b
 
 type RTL a i = StateT (Int, a, Program i) Id
 
@@ -124,15 +125,15 @@ copy a b = instr $ Copy a b
 push :: Var -> RTL a i ()
 push = instr . Push
 
-pushCont :: Label -> Int -> RTL a i ()
-pushCont a b = instr $ PushCont a b
+pushCont :: Label -> RTL a i ()
+pushCont a = instr $ PushCont a
 
 pop :: Var -> RTL a i ()
 pop = instr . Pop
 
-const' :: Var -> Literal -> RTL a i ()
+const' :: Literal -> Var -> RTL a i ()
 const' a b = instr $ Const a b
 
-intrinsic :: i -> Var -> [Var] -> RTL a i ()
+intrinsic :: i -> [Var] -> Var -> RTL a i ()
 intrinsic a b c = instr $ Intrinsic a b c
 

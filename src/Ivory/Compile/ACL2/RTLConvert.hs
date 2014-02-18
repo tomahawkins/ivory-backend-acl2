@@ -11,9 +11,9 @@ import qualified Ivory.Compile.ACL2.RTL as R
 
 type RTL i = R.RTL [Proc i] i
 
--- | Convert a list of CPS procedures to an RTL program.
+-- | Convert a list of alpha-converted CPS procedures to an RTL program.
 rtlConvert :: [Proc i] -> Program i
-rtlConvert procs = snd $ elaborate procs $ mapM_ proc $ alphaConvert procs
+rtlConvert procs = snd $ elaborate procs $ mapM_ proc procs
 
 proc :: Proc i -> RTL i ()
 proc (Proc name args body) = do
@@ -25,40 +25,38 @@ cont :: Cont i -> RTL i ()
 cont a = case a of
   Call f args k -> do
     procs <- getMeta
-    let names = head [ args | Proc name args _ <- procs, name == f ] 
+    let argVars = head [ args | Proc name args _ <- procs, name == f ] 
         vars  = contFreeVars k
+    comment "Pushing variables that are needed for after the call returns."
     sequence_ [ push a | a <- vars ]
     kLabel <- gensym
-    pushCont kLabel $ length vars
-    sequence_ [ copy a $ sValue b | (a, b) <- zip names args ]
+    comment "Push the continuation."
+    pushCont kLabel
+    comment "Copy the arguments to the functions argument variables."
+    sequence_ [ copy a b | (a, b) <- zip args argVars ]
+    comment "Call the function."
     jump f
+    comment "On return from function..."
     label kLabel
+    comment "Restore needed variables."
     sequence_ [ pop a | a <- reverse vars ]
+    comment "Execute the continuation after the call."
     cont k
 
-  {-
-  Pop a -> do
-
-    cont i a
-    -}
-
-  C.Return a -> case a of
-    Just (Var a)     -> do copy "retval" a >> return'
-    Just ReturnValue -> do                    return'
-    Nothing          -> do                    return'
+  C.Return Nothing  -> return'
+  C.Return (Just a) -> copy a "retval" >> return'
 
   Let a b c -> do
     case b of
-      SValue    (Var b)     -> copy  a b
-      SValue    ReturnValue -> copy  a "retval"
-      Literal   b           -> const' a b
-      C.Intrinsic i args    -> intrinsic i a $ map sValue args
-      Deref     _ -> error "Deref not supported."
+      Var b              -> copy  b a
+      Literal b          -> const' b a
+      C.Intrinsic i args -> intrinsic i args a
+      Deref _            -> error "Deref not supported."
     cont c
 
   If a b c -> do
     onTrue <- gensym
-    branch (sValue a) onTrue
+    branch a onTrue
     cont c
     label onTrue
     cont b
@@ -67,17 +65,15 @@ cont a = case a of
 
   C.Assert a b -> do
     ok <- gensym
-    branch (sValue a) ok
+    branch a ok
     fail'
     label ok
     cont b
-  Assume a b -> cont $ Assert a b
-  --Store   a b c -> sValue a ++ sValue b ++ cont i c
-  --Forever a     -> cont i a
-  --Loop    a b _ c d e -> sValue b ++ sValue c ++ cont (a : i) d ++ cont i e
 
-sValue :: SValue -> Var
-sValue a = case a of
-  Var a -> a
-  ReturnValue -> "retval"
+  Assume a b -> cont $ Assert a b
+
+  C.Pop _          -> error "Pop not supported."
+  Store _ _ _      -> error "Store not supported."
+  Forever _ _      -> error "Forever not supported."
+  Loop _ _ _ _ _ _ -> error "Loop not supported."
 

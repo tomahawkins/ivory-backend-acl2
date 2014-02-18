@@ -24,7 +24,7 @@ gensym :: CPS Var
 gensym = do
   (i, l) <- get
   set (i + 1, l)
-  return $ "_" ++ show i
+  return $ "_cpsConvert" ++ show i
 
 withLoop :: CPS a -> CPS a
 withLoop a = do
@@ -60,21 +60,21 @@ cpsStmts a cont = case a of
       I.Assert         a -> cpsExpr a $ \ a -> return $ Assert a cont
       I.CompilerAssert a -> cpsExpr a $ \ a -> return $ Assert a cont
       I.Assume         a -> cpsExpr a $ \ a -> return $ Assume a cont
-      I.Deref  _ a b -> cpsExpr b $ \ b -> return $ Let (varSym a) (SValue b) cont
+      I.Deref  _ a b -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont
       I.Store  _ a b -> cpsExpr a $ \ a -> cpsExpr b $ \ b -> return $ Store a b cont  -- Assumes a is evaluated before b in a = b.
-      I.Assign _ a b -> cpsExpr b $ \ b -> return $ Let (varSym a) (SValue b) cont
-      I.Local  _ a (I.InitExpr _ b) -> cpsExpr b $ \ b -> return $ Let (varSym a) (SValue b) cont  
+      I.Assign _ a b -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont
+      I.Local  _ a (I.InitExpr _ b) -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont  
       I.Call _ Nothing fun args -> f [] $ map tValue args
         where
-        f :: [SValue] -> [I.Expr] -> CPS (Cont I.ExpOp)
+        f :: [Var] -> [I.Expr] -> CPS (Cont I.ExpOp)
         f args a = case a of
           [] -> return $ Call (nameSym fun) args cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
       I.Call _ (Just result) fun args -> f [] $ map tValue args
         where
-        f :: [SValue] -> [I.Expr] -> CPS (Cont I.ExpOp)
+        f :: [Var] -> [I.Expr] -> CPS (Cont I.ExpOp)
         f args a = case a of
-          [] -> return $ Call (nameSym fun) args $ Let (varSym result) (SValue ReturnValue) cont
+          [] -> return $ Call (nameSym fun) args $ Let (varSym result) (Var "retval") cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
       I.Forever a -> do
         loop <- withLoop $ cpsStmts a Halt
@@ -95,21 +95,21 @@ cpsStmts a cont = case a of
       I.Local _ _ (I.InitStruct _) -> error "Local _ _ (InitStruct _) not supported."
       I.Local _ _ (I.InitArray _) -> error "Local _ _ (InitArray _) not supported."
 
-cpsExpr :: I.Expr -> (SValue -> CPS (Cont I.ExpOp)) -> CPS (Cont I.ExpOp)
+cpsExpr :: I.Expr -> (Var -> CPS (Cont I.ExpOp)) -> CPS (Cont I.ExpOp)
 cpsExpr a k = case a of
-  I.ExpSym a -> k $ Var a
-  I.ExpVar a -> k $ Var $ varSym a
+  I.ExpSym a -> k a
+  I.ExpVar a -> k $ varSym a
   I.ExpLit a -> do
     v <- gensym
-    cont <- k $ Var v
+    cont <- k v
     return $ Let v (Literal $ lit a) cont
   I.ExpOp op args -> f args []
     where
-    f :: [I.Expr] -> [SValue] -> CPS (Cont I.ExpOp)
+    f :: [I.Expr] -> [Var] -> CPS (Cont I.ExpOp)
     f argsE argsV = case argsE of
       [] -> do
         v <- gensym
-        cont <- k $ Var v
+        cont <- k v
         return $ Let v (Intrinsic op argsV) cont
       a : b -> cpsExpr a $ \ a -> f b (argsV ++ [a])
   _ -> error "Unsupported expression."
