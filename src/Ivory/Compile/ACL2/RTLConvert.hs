@@ -29,7 +29,7 @@ cont a = case a of
         vars  = contFreeVars k
     comment "Pushing variables that are needed for after the call returns."
     sequence_ [ push a | a <- vars ]
-    kLabel <- gensym
+    kLabel <- genVar
     comment "Push the continuation."
     pushCont kLabel
     comment "Copy the arguments to the functions argument variables."
@@ -55,7 +55,7 @@ cont a = case a of
     cont c
 
   If a b c -> do
-    onTrue <- gensym
+    onTrue <- genVar
     branch a onTrue
     cont c
     label onTrue
@@ -64,7 +64,7 @@ cont a = case a of
   C.Halt -> halt
 
   C.Assert a b -> do
-    ok <- gensym
+    ok <- genVar
     branch a ok
     fail'
     label ok

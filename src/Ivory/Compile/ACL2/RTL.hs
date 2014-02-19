@@ -4,12 +4,14 @@ module Ivory.Compile.ACL2.RTL
   , Label
   , Program     (..)
   , Instruction (..)
+  , variables
+  , labels
   -- * RTL DSL
   , RTL
   , elaborate
   , getMeta
   , setMeta
-  , gensym
+  , genVar
   -- ** Instructions
   , comment
   , label
@@ -70,25 +72,54 @@ instance Show i => Show (Instruction i) where
     Const     a b   -> printf "\tconst' (%s) %s" (show a) b
     Intrinsic i a b -> printf "\tintrinsic (%s) (%s) %s" (show i) (intercalate ", " a) b
 
+-- | All the variables in a program.
+variables :: Program i -> [Var]
+variables (Program p) = nub $ concatMap f p
+  where
+  f :: Instruction i -> [Var]
+  f a = case a of
+    Comment   _     -> []
+    Label     _     -> []
+    Return          -> []
+    Jump      _     -> []
+    Branch    a _   -> [a]
+    Fail            -> []
+    Halt            -> []
+    Copy      a b   -> [a, b]
+    Push      a     -> [a]
+    PushCont  _     -> []
+    Pop       a     -> [a]
+    Const     _ a   -> [a]
+    Intrinsic _ a b -> a ++ [b]
+
+-- | The address of all labels in a program.
+labels :: Program i -> [(Label, Int)]
+labels (Program p) = [ (a, addr) | (Label a, addr) <- zip p [0 ..] ]
+
+
 type RTL a i = StateT (Int, a, Program i) Id
 
+-- | Elaborates an RTL description to a Program.
 elaborate :: a -> RTL a i () -> (a, Program i)
 elaborate a p = (a', b)
   where
   ((), (_, a', b)) = runId $ runStateT (0, a, Program []) p 
 
+-- | Get the meta data.
 getMeta :: RTL a i a
 getMeta = do
   (_, a, _) <- get
   return a
 
+-- | Set the meta data.
 setMeta :: a -> RTL a i ()
 setMeta a = do
   (i, _, p) <- get
   set (i, a, p)
 
-gensym :: RTL a i String
-gensym = do
+-- | Generate a variable.
+genVar :: RTL a i String
+genVar = do
   (i, a, p) <- get
   set (i + 1, a, p)
   return $ "_rtl_" ++ show i

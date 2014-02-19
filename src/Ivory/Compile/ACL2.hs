@@ -32,7 +32,7 @@ compileModule m = do
   print rtl
   putStrLn ""
   putStrLn "acl2:"
-  print acl2
+  mapM_ print acl2
 
 showModule :: I.Module -> String
 showModule m = unlines
