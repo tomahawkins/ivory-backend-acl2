@@ -2,70 +2,91 @@
 module Ivory.Compile.ACL2.ACL2
   ( Expr
   , defun
+  , defconst
   , call
+  , obj
+  , quote
   , cons
   , car
   , cdr
   , nth
   , let'
+  , if'
   , var
   , lit
   , nil
-  , add
+  , zp
+  , undefined'
   ) where
 
 import Ivory.Compile.ACL2.SExpr
 
 data Expr
-  = Defun   String [String] Expr
-  | MutualRecursion [Expr]
-  | Call    String [Expr]
-  | Let'    [(String, Expr)] Expr
-  | Var     String
-  | Lit     String
-  | Nil
+  = Obj [Expr]
+  | Lit String
+  deriving Eq
 
 instance Show Expr where show = show . sExpr
 
+instance Num Expr where
+  a + b = call "+" [a, b]
+  a - b = call "-" [a, b]
+  a * b = call "*" [a, b]
+  negate a = 0 - a
+  abs = undefined
+  signum = undefined
+  fromInteger = Lit . show
+
 sExpr :: Expr -> SExpr
 sExpr a = case a of
-  Defun   name args body -> SA [SV "defun", SV name, SA $ map SV args, sExpr body]
-  MutualRecursion a -> SA $ SV "mutual-recursion" : map sExpr a
-  Call    a b -> SA $ SV a : map sExpr b
-  Let'    a b   -> SA $ SV "let*" : SA [ SA [SV name, sExpr a] | (name, a) <- a ] : [sExpr b]
-  Var     a -> SV a
-  Lit     a -> SV a
-  Nil         -> SV "nil"
+  Obj     a   -> SA $ map sExpr a
+  Lit     a   -> SV a
 
 defun :: String -> [String] -> Expr -> Expr
-defun = Defun
+defun name args body = call "defun" $ [var name, obj $ map var args, body]
+
+defconst :: String -> Expr -> Expr
+defconst name const = call "defconst" [var name, const]
  
 call :: String -> [Expr] -> Expr
-call = Call
+call a b = Obj $ var a : b
+
+obj :: [Expr] -> Expr
+obj = Obj
+
+quote :: Expr -> Expr
+quote a = call "quote" [a]
 
 cons :: Expr -> Expr -> Expr
-cons a b = Call "cons" [a, b]
+cons a b = call "cons" [a, b]
 
 car :: Expr -> Expr
-car a = Call "car" [a]
+car a = call "car" [a]
 
 cdr :: Expr -> Expr
-cdr a = Call "cdr" [a]
+cdr a = call "cdr" [a]
 
 nth :: Expr -> Expr -> Expr
-nth a b = Call "nth" [a, b]
+nth a b = call "nth" [a, b]
 
 let' :: [(String, Expr)] -> Expr -> Expr
-let' = Let'
+let' a b = call "let*" [obj [ obj [var n, e] | (n, e) <- a ], b]
 
 var :: String -> Expr
-var = Var
+var = Lit
 
 lit :: String -> Expr
 lit = Lit
 
 nil :: Expr
-nil = Nil
+nil = Lit "nil"
 
-add :: Expr -> Expr -> Expr
-add a b = call "+" [a, b]
+if' :: Expr -> Expr -> Expr -> Expr
+if' a b c = call "if" [a, b, c]
+
+zp :: Expr -> Expr
+zp a = call "zp" [a]
+
+undefined' :: Expr
+undefined' = Lit "undefined"
+
