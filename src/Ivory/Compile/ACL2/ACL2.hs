@@ -16,6 +16,7 @@ module Ivory.Compile.ACL2.ACL2
   , lit
   , nil
   , zp
+  , zip'
   , undefined'
   ) where
 
@@ -86,6 +87,9 @@ if' a b c = call "if" [a, b, c]
 
 zp :: Expr -> Expr
 zp a = call "zp" [a]
+
+zip' :: Expr -> Expr
+zip' a = call "zip" [a]
 
 undefined' :: Expr
 undefined' = Lit "undefined"
