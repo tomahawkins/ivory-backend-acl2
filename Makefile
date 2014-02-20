@@ -1,6 +1,11 @@
 .PHONY: all
-all: Factorial.hs dist/setup-config
+all: Factorial.c
+
+Factorial.c: Factorial.hs dist/setup-config
 	runhaskell -W Factorial.hs
+
+PPMDecode.c: PPMDecode.hs dist/setup-config
+	runhaskell -W PPMDecode.hs
 
 dist/setup-config: src/Ivory/Compile/ACL2.hs src/Ivory/Compile/ACL2/*.hs
 	cabal build
@@ -9,8 +14,5 @@ dist/setup-config: src/Ivory/Compile/ACL2.hs src/Ivory/Compile/ACL2/*.hs
 .PHONY: clean
 clean:
 	cabal clean
-	-rm Factorial.c
-	-rm Factorial.h
-	-rm ivory.h
-	-rm ivory_asserts.h
+	-rm *.c *.h
 
