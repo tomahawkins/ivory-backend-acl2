@@ -89,8 +89,58 @@ instructionSemantics =
   , defun "rtl-pop"       ["s", "a"]           $ incrPC $ let' [("b", popDataStack s), ("s", car b), ("b", cdr b)] $ setDataMem s $ replace a (getDataMem s) b 
   , defun "rtl-copy"      ["s", "a", "b"]      $ incrPC $ setDataMem s $ replace b (getDataMem s) $ nth a $ getDataMem s
   , defun "rtl-const"     ["s", "a", "b"]      $ incrPC $ setDataMem s $ replace b (getDataMem s) a
-  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ replace c (getDataMem s) $ case' a
-    [ (undefined', undefined')
+  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ let' [("mem", getDataMem s)] $ replace c mem $ case' a
+    [ (codeExpEq            , if' (equal (arg 0) (arg 1)) 1 0)
+    , (codeExpNeq           , if' (not' (equal (arg 0) (arg 1))) 1 0)
+    , (codeExpCond          , if' (zip' (arg 0)) (arg 2) (arg 1))
+    , (codeExpGt            , if' (call ">"  [arg 0, arg 1]) 1 0)
+    , (codeExpGe            , if' (call ">=" [arg 0, arg 1]) 1 0)
+    , (codeExpLt            , if' (call "<"  [arg 0, arg 1]) 1 0)
+    , (codeExpLe            , if' (call "<=" [arg 0, arg 1]) 1 0)
+    , (codeExpNot           , if' (zip' (arg 0)) 1 0)
+    , (codeExpAnd           , if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1)
+    , (codeExpOr            , if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1)
+    , (codeExpMul           , arg 0 * arg 1)
+    , (codeExpAdd           , arg 0 + arg 1)
+    , (codeExpSub           , arg 0 - arg 1)
+    , (codeExpNegate        , 0 - arg 1)
+    , (codeExpAbs           , if' (call ">=" [arg 0]) (arg 0) (0 - arg 0))
+    , (codeExpSignum        , if' (call ">" [arg 0]) 1 $ if' (call "<" [arg 0]) (-1) 0)
+    {-
+    , (codeExpDiv           , )
+    , (codeExpMod           , )
+    , (codeExpRecip         , )
+    , (codeExpFExp          , )
+    , (codeExpFSqrt         , )
+    , (codeExpFLog          , )
+    , (codeExpFPow          , )
+    , (codeExpFLogBase      , )
+    , (codeExpFSin          , )
+    , (codeExpFTan          , )
+    , (codeExpFCos          , )
+    , (codeExpFAsin         , )
+    , (codeExpFAtan         , )
+    , (codeExpFAcos         , )
+    , (codeExpFSinh         , )
+    , (codeExpFTanh         , )
+    , (codeExpFCosh         , )
+    , (codeExpFAsinh        , )
+    , (codeExpFAtanh        , )
+    , (codeExpFAcosh        , )
+    , (codeExpIsNan         , )
+    , (codeExpIsInf         , )
+    , (codeExpRoundF        , )
+    , (codeExpCeilF         , )
+    , (codeExpFloorF        , )
+    , (codeExpToFloat       , )
+    , (codeExpFromFloat     , )
+    , (codeExpBitAnd        , )
+    , (codeExpBitOr         , )
+    , (codeExpBitXor        , )
+    , (codeExpBitComplement , )
+    , (codeExpBitShiftL     , )
+    , (codeExpBitShiftR     , )
+    -}
     ] 0
   ]
   where
@@ -98,6 +148,8 @@ instructionSemantics =
   a = var "a"
   b = var "b"
   c = var "c"
+  mem = var "mem"
+  arg i = nth (nth i b) mem
 
 -- | Step the machine by one instruction.
 step :: Expr
@@ -183,6 +235,8 @@ encodeOp a = case a of
   ExpNegate        -> codeExpNegate       
   ExpAbs           -> codeExpAbs          
   ExpSignum        -> codeExpSignum       
+  a -> error $ "ExpOp not supported: " ++ show a
+  {-
   ExpDiv           -> codeExpDiv          
   ExpMod           -> codeExpMod          
   ExpRecip         -> codeExpRecip        
@@ -216,6 +270,7 @@ encodeOp a = case a of
   ExpBitComplement -> codeExpBitComplement
   ExpBitShiftL     -> codeExpBitShiftL    
   ExpBitShiftR     -> codeExpBitShiftR    
+  -}
 
 codeExpEq            = 0
 codeExpNeq           = 1
@@ -233,6 +288,7 @@ codeExpSub           = 12
 codeExpNegate        = 13
 codeExpAbs           = 14
 codeExpSignum        = 15
+{-
 codeExpDiv           = 16
 codeExpMod           = 17
 codeExpRecip         = 18
@@ -266,4 +322,5 @@ codeExpBitXor        = 45
 codeExpBitComplement = 46
 codeExpBitShiftL     = 47
 codeExpBitShiftR     = 48
+-}
 

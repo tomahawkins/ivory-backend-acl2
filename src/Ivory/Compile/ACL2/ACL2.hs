@@ -19,6 +19,10 @@ module Ivory.Compile.ACL2.ACL2
   , zp
   , zip'
   , undefined'
+  , equal
+  , not'
+  , and'
+  , or'
   ) where
 
 import Ivory.Compile.ACL2.SExpr
@@ -97,4 +101,16 @@ zip' a = call "zip" [a]
 
 undefined' :: Expr
 undefined' = Lit "undefined"
+
+equal :: Expr -> Expr -> Expr
+equal a b = call "equal" [a, b]
+
+not' :: Expr -> Expr
+not' a = call "not" [a]
+
+and' :: Expr -> Expr -> Expr
+and' a b = call "and" [a, b]
+
+or' :: Expr -> Expr -> Expr
+or' a b = call "or" [a, b]
 
