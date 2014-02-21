@@ -16,9 +16,8 @@ acl2Convert program@(Program instrs) = utils ++ instructionSemantics ++
   , stepN
   , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction labs vars) instrs, nil, nil, labs "main"]
   ] ++
-  [ defthm ("fail-at-" ++ show failAddr) $ not' $ equal (fromIntegral failAddr) $ getPC $ call "rtl-step-n" [var "*rtl-init-state*", var "n"]
-  | failAddr <- fails
-  ]
+  [ defun  ("fail-at-" ++ show a ++ "-fun") ["n"] $ not' $ equal (fromIntegral a) $ getPC $ stepN' n | a <- fails ] ++
+  [ defthm ("fail-at-" ++ show a ++ "-thm") $ call ("fail-at-" ++ show a ++ "-fun") [n]              | a <- fails ]
   where
   labs :: Label -> Expr
   labs = fromJust . flip lookup [ (a, fromIntegral b) | (a, b) <- labels program ]
@@ -26,6 +25,8 @@ acl2Convert program@(Program instrs) = utils ++ instructionSemantics ++
   vars = fromJust . flip lookup (zip (variables program) [0 ..])
   fails :: [Int]
   fails = [ a | (a, Fail) <- zip [0 ..] instrs ]
+  stepN' n = call "rtl-step-n" [var "*rtl-init-state*", n]
+  n = var "n"
 
 -- State: '(instrMem dataMem callStack dataStack pc)
 utils :: [Expr]

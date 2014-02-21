@@ -31,6 +31,7 @@ data Literal
   | LitBool Bool
   | LitNull
   | LitString String
+  deriving Eq
 
 instance Show Literal where
   show a = case a of
@@ -41,6 +42,15 @@ instance Show Literal where
     LitBool    a -> show a
     LitString  a -> show a
     LitNull      -> "null"
+
+instance Num Literal where
+  (+)    = error "Method not supported for Num Literal."
+  (-)    = error "Method not supported for Num Literal."
+  (*)    = error "Method not supported for Num Literal."
+  negate = error "Method not supported for Num Literal."
+  abs    = error "Method not supported for Num Literal."
+  signum = error "Method not supported for Num Literal."
+  fromInteger = LitInteger
 
 -- | Values used in let bindings.
 data Value a

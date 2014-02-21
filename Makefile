@@ -1,8 +1,11 @@
 .PHONY: all
 all: log
 
-log: Factorial.lisp
-	acl2 < Factorial.lisp | tee log
+log: test.lisp
+	acl2 < test.lisp | tee log
+
+test.lisp: Tests.hs dist/setup-config
+	runhaskell -W Tests.hs
 
 Factorial.lisp Factorial.c: Factorial.hs dist/setup-config
 	runhaskell -W Factorial.hs

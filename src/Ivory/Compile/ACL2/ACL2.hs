@@ -24,6 +24,7 @@ module Ivory.Compile.ACL2.ACL2
   , not'
   , and'
   , or'
+  , goodbye
   ) where
 
 import Ivory.Compile.ACL2.SExpr
@@ -117,4 +118,7 @@ and' a b = call "and" [a, b]
 
 or' :: Expr -> Expr -> Expr
 or' a b = call "or" [a, b]
+
+goodbye :: Expr
+goodbye = call "good-bye" []
 
