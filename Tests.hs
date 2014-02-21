@@ -11,11 +11,13 @@ main = do
 
 rtl :: Program ExpOp
 rtl = snd $ elaborate () $ do
-  label "main"
+  label "start"
+  pushCont "done"
   const' 1 "one"
   branch "one" "here"
   fail'
   label "here"
   return'      -- XXX This causes ACL2 to fail.  Same problem in fac test.
-  --halt
+  label "done"
+  halt
 

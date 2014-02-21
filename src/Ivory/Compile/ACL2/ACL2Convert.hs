@@ -14,7 +14,7 @@ acl2Convert :: Program ExpOp -> [Expr]
 acl2Convert program@(Program instrs) = utils ++ instructionSemantics ++
   [ step
   , stepN
-  , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction labs vars) instrs, nil, nil, labs "main"]
+  , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction labs vars) instrs, nil, nil, labs "start"]
   ] ++
   [ defun  ("fail-at-" ++ show a ++ "-fun") ["n"] $ not' $ equal (fromIntegral a) $ getPC $ stepN' n | a <- fails ] ++
   [ defthm ("fail-at-" ++ show a ++ "-thm") $ call ("fail-at-" ++ show a ++ "-fun") [n]              | a <- fails ]

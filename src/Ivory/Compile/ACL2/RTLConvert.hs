@@ -13,7 +13,13 @@ type RTL i = R.RTL [Proc i] i
 
 -- | Convert a list of alpha-converted CPS procedures to an RTL program.
 rtlConvert :: [Proc i] -> Program i
-rtlConvert procs = snd $ elaborate procs $ mapM_ proc procs
+rtlConvert procs = snd $ elaborate procs $ do
+  label "start"
+  pushCont "done"
+  jump "main"
+  mapM_ proc procs
+  label "done"
+  halt
 
 proc :: Proc i -> RTL i ()
 proc (Proc name args body) = do

@@ -35,4 +35,3 @@ main = do
   compileModule module'
   runCompiler [module'] initialOpts
 
-
