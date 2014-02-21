@@ -10,7 +10,12 @@ import Ivory.Compile.ACL2.RTL
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
 acl2Convert :: Program ExpOp -> [Expr]
-acl2Convert program = utils ++ instructionSemantics ++ [step, stepN] ++ [assemble labs vars program]
+acl2Convert program@(Program instrs) = utils ++ instructionSemantics ++
+  [ step
+  , stepN
+  , defconst "*rtl-program*"    $ quote $ obj $ map (assembleInstruction labs vars) instrs
+  , defconst "*rtl-init-state*" $ quote $ obj [var "*rtl-program*", nil, nil, labs "main"]
+  ]
   where
   labs :: Label -> Expr
   labs = fromJust . flip lookup [ (a, fromIntegral b) | (a, b) <- labels program ]
@@ -22,20 +27,20 @@ utils :: [Expr]
 utils =
   [ defun "get-instr-mem"   ["s"]      $ nth' 0 s
   , defun "get-data-mem"    ["s"]      $ nth' 1 s
-  , defun "set-data-mem"    ["s", "a"] $ replace' 1 s a
+  , defun "set-data-mem"    ["s", "a"] $ replaceNth' 1 s a
   , defun "get-call-stack"  ["s"]      $ nth' 2 s
-  , defun "set-call-stack"  ["s", "a"] $ replace' 2 s a
+  , defun "set-call-stack"  ["s", "a"] $ replaceNth' 2 s a
   , defun "get-data-stack"  ["s"]      $ nth' 3 s
-  , defun "set-data-stack"  ["s", "a"] $ replace' 3 s a
+  , defun "set-data-stack"  ["s", "a"] $ replaceNth' 3 s a
   , defun "get-pc"          ["s"]      $ nth' 4 s
-  , defun "set-pc"          ["s", "a"] $ replace' 4 s a
+  , defun "set-pc"          ["s", "a"] $ replaceNth' 4 s a
   , defun "incr-pc"         ["s"]      $ setPC s $ getPC s + 1
   , defun "instr-fetch"     ["s"]      $ nth (getPC s) $ getInstrMem s
   , defun "push-data-stack" ["s", "a"] $ setDataStack s $ cons a $ getDataStack s
   , defun "pop-data-stack"  ["s"]      $ cons (setDataStack s $ cdr $ getDataStack s) (car $ getDataStack s)
   , defun "push-call-stack" ["s", "a"] $ setCallStack s $ cons a $ getCallStack s
   , defun "pop-call-stack"  ["s"]      $ cons (setCallStack s $ cdr $ getCallStack s) (car $ getCallStack s)
-  , defun "replace" ["n", "l", "v"] $ if' (zp n) (cons v $ cdr l) (cons (car l) $ replace (n - 1) (cdr l) v)
+  , defun "replace-nth"     ["n", "l", "v"] $ if' (zp n) (cons v $ cdr l) (cons (car l) $ replaceNth (n - 1) (cdr l) v)
   ]
   where
   s = var "s"
@@ -51,13 +56,13 @@ nth' n l
   | otherwise = nth' (n - 1) $ cdr l
 
 -- | Replaces the nth element in a list with a value.
-replace' n l v = f n l
+replaceNth' n l v = f n l
   where
   f n l
     | n <= 0    = cons v $ cdr l
     | otherwise = cons (car l) $ f (n - 1) $ cdr l
 
-replace n l v = call "replace" [n, l, v]
+replaceNth n l v = call "replace-nth" [n, l, v]
 
 getInstrMem   s   = call "get-instr-mem"   [s]
 getDataMem    s   = call "get-data-mem"    [s]
@@ -86,10 +91,10 @@ instructionSemantics =
   , defun "rtl-branch"    ["s", "a", "b"]      $ if' (zip' $ nth a (getDataMem s)) (incrPC s) (setPC s b)
   , defun "rtl-push-cont" ["s", "a"]           $ incrPC $ pushCallStack s a
   , defun "rtl-push"      ["s", "a"]           $ incrPC $ pushDataStack s $ nth a $ getDataMem s 
-  , defun "rtl-pop"       ["s", "a"]           $ incrPC $ let' [("b", popDataStack s), ("s", car b), ("b", cdr b)] $ setDataMem s $ replace a (getDataMem s) b 
-  , defun "rtl-copy"      ["s", "a", "b"]      $ incrPC $ setDataMem s $ replace b (getDataMem s) $ nth a $ getDataMem s
-  , defun "rtl-const"     ["s", "a", "b"]      $ incrPC $ setDataMem s $ replace b (getDataMem s) a
-  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ let' [("mem", getDataMem s)] $ replace c mem $ case' a
+  , defun "rtl-pop"       ["s", "a"]           $ incrPC $ let' [("b", popDataStack s), ("s", car b), ("b", cdr b)] $ setDataMem s $ replaceNth a (getDataMem s) b 
+  , defun "rtl-copy"      ["s", "a", "b"]      $ incrPC $ setDataMem s $ replaceNth b (getDataMem s) $ nth a $ getDataMem s
+  , defun "rtl-const"     ["s", "a", "b"]      $ incrPC $ setDataMem s $ replaceNth b (getDataMem s) a
+  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ let' [("mem", getDataMem s)] $ replaceNth c mem $ case' a
     [ (codeExpEq            , if' (equal (arg 0) (arg 1)) 1 0)
     , (codeExpNeq           , if' (not' (equal (arg 0) (arg 1))) 1 0)
     , (codeExpCond          , if' (zip' (arg 0)) (arg 2) (arg 1))
@@ -104,8 +109,8 @@ instructionSemantics =
     , (codeExpAdd           , arg 0 + arg 1)
     , (codeExpSub           , arg 0 - arg 1)
     , (codeExpNegate        , 0 - arg 1)
-    , (codeExpAbs           , if' (call ">=" [arg 0]) (arg 0) (0 - arg 0))
-    , (codeExpSignum        , if' (call ">" [arg 0]) 1 $ if' (call "<" [arg 0]) (-1) 0)
+    , (codeExpAbs           , if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0))
+    , (codeExpSignum        , if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0)
     {-
     , (codeExpDiv           , )
     , (codeExpMod           , )
@@ -168,7 +173,7 @@ step = defun "rtl-step" ["s"]
     , (codePushCont  , call "rtl-push-cont" [s, nth 1 instr])
     , (codePop       , call "rtl-pop"       [s, nth 1 instr])
     , (codeConst     , call "rtl-const"     [s, nth 1 instr, nth 2 instr])
-    , (codeIntrinsic , call "rtl_intrinsic" [s, nth 1 instr, nth 2 instr, nth 3 instr])
+    , (codeIntrinsic , call "rtl-intrinsic" [s, nth 1 instr, nth 2 instr, nth 3 instr])
     ] s
   where
   s = var "s"
@@ -180,10 +185,6 @@ stepN = defun "rtl-step-n" ["s", "n"] $ if' (zp n) s (call "rtl-step-n" [call "r
   where
   s = var "s"
   n = var "n"
-
--- | Assemble an RTL program into an ACL2 data structure.
-assemble :: (Label -> Expr) -> (Var -> Int) -> Program ExpOp -> Expr
-assemble labs vars (Program instrs) = defconst "rtl-program" $ quote $ obj $ map (encodeInstruction labs vars) instrs
 
 codeComment   = 0
 codeLabel     = 1
@@ -199,8 +200,9 @@ codePop       = 10
 codeConst     = 11
 codeIntrinsic = 12
 
-encodeInstruction :: (Label -> Expr) -> (Var -> Int) -> Instruction ExpOp -> Expr
-encodeInstruction labelAddr varAddr' a = case a of
+-- | Assemble an intruction into ACL2.
+assembleInstruction :: (Label -> Expr) -> (Var -> Int) -> Instruction ExpOp -> Expr
+assembleInstruction labelAddr varAddr' a = case a of
   Comment   _     -> obj [codeComment                              ]
   Label     _     -> obj [codeLabel                                ]
   Return          -> obj [codeReturn                               ]

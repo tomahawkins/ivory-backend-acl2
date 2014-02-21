@@ -22,17 +22,11 @@ compileModule m = do
       cps2 = alphaConvert cps1
       rtl = rtlConvert cps2
       acl2 = acl2Convert rtl
-  putStrLn "cps1:"
-  mapM_ print cps1
-  putStrLn ""
-  putStrLn "cps2:"
-  mapM_ print cps2
-  putStrLn ""
-  putStrLn "rtl:"
-  print rtl
-  putStrLn ""
-  putStrLn "acl2:"
-  mapM_ print acl2
+      name = I.modName m
+  writeFile (name ++ ".cps1") $ unlines $ map show cps1
+  writeFile (name ++ ".cps2") $ unlines $ map show cps2
+  writeFile (name ++ ".rtl")  $ show rtl
+  writeFile (name ++ ".lisp") $ unlines $ map show acl2
 
 showModule :: I.Module -> String
 showModule m = unlines

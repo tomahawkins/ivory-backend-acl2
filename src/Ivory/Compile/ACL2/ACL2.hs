@@ -91,7 +91,7 @@ if' :: Expr -> Expr -> Expr -> Expr
 if' a b c = call "if" [a, b, c]
 
 case' :: Expr -> [(Expr, Expr)] -> Expr -> Expr
-case' a b c = call "case'" $ a : [ obj [a, b] | (a, b) <- b ] ++ [call "otherwise" [c]]
+case' a b c = call "case" $ a : [ obj [a, b] | (a, b) <- b ] ++ [call "otherwise" [c]]
 
 zp :: Expr -> Expr
 zp a = call "zp" [a]

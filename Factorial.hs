@@ -18,12 +18,20 @@ factorial  = proc "factorial" $ \ n ->
       (do ret n
       )
 
-fac :: Module
-fac = package "Factorial" $ incl factorial
+main' :: Def ('[] :-> ())
+main' = proc "main" $ body $ do
+  a <- call factorial 3
+  assert $ a ==? 6
+  retVoid
+
+module' :: Module
+module' = package "Factorial" $ do
+  incl factorial
+  incl main'
 
 main :: IO ()
 main = do
-  compileModule fac
-  runCompiler [fac] initialOpts
+  compileModule module'
+  runCompiler [module'] initialOpts
 
 
