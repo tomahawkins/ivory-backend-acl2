@@ -26,7 +26,7 @@ main' = proc "main" $ body $ do
   retVoid
 
 module' :: Module
-module' = package "Factorial" $ do
+module' = package "factorial" $ do
   incl factorial
   incl main'
 

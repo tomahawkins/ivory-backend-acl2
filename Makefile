@@ -1,13 +1,16 @@
 .PHONY: all
-all: log
+all: test.log
 
-log: test.lisp
-	acl2 < test.lisp | tee log
+test.log: test.lisp
+	acl2 < test.lisp | tee test.log
+
+factorial.log: factorial.lisp
+	acl2 < factorial.lisp | tee factorial.log
 
 test.lisp: Tests.hs dist/setup-config
 	runhaskell -W Tests.hs
 
-Factorial.lisp Factorial.c: Factorial.hs dist/setup-config
+factorial.lisp: Factorial.hs dist/setup-config
 	runhaskell -W Factorial.hs
 
 dist/setup-config: src/Ivory/Compile/ACL2.hs src/Ivory/Compile/ACL2/*.hs
@@ -22,5 +25,5 @@ clean:
 	-rm *.cps2
 	-rm *.rtl
 	-rm *.lisp
-	-rm log
+	-rm *.log
 

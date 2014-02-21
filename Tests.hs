@@ -16,5 +16,6 @@ rtl = snd $ elaborate () $ do
   branch "one" "here"
   fail'
   label "here"
-  halt
+  return'      -- XXX This causes ACL2 to fail.  Same problem in fac test.
+  --halt
 
