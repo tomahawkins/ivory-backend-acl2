@@ -3,6 +3,7 @@ module Ivory.Compile.ACL2.ACL2
   ( Expr
   , defun
   , defconst
+  , defthm
   , call
   , obj
   , quote
@@ -53,6 +54,9 @@ defun name args body = call "defun" $ [var name, obj $ map var args, body]
 
 defconst :: String -> Expr -> Expr
 defconst name const = call "defconst" [var name, const]
+
+defthm :: String -> Expr -> Expr
+defthm name a = call "defthm" [var name, a]
  
 call :: String -> [Expr] -> Expr
 call a b = Obj $ var a : b

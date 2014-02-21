@@ -7,20 +7,25 @@ import Data.Maybe (fromJust)
 
 import Ivory.Compile.ACL2.ACL2
 import Ivory.Compile.ACL2.RTL
+import Ivory.Compile.ACL2.CPS (Literal (..))
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
 acl2Convert :: Program ExpOp -> [Expr]
 acl2Convert program@(Program instrs) = utils ++ instructionSemantics ++
   [ step
   , stepN
-  , defconst "*rtl-program*"    $ quote $ obj $ map (assembleInstruction labs vars) instrs
-  , defconst "*rtl-init-state*" $ quote $ obj [var "*rtl-program*", nil, nil, labs "main"]
+  , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction labs vars) instrs, nil, nil, labs "main"]
+  ] ++
+  [ defthm ("fail-at-" ++ show failAddr) $ not' $ equal (fromIntegral failAddr) $ getPC $ call "rtl-step-n" [var "*rtl-init-state*", var "n"]
+  | failAddr <- fails
   ]
   where
   labs :: Label -> Expr
   labs = fromJust . flip lookup [ (a, fromIntegral b) | (a, b) <- labels program ]
   vars :: Var -> Int
   vars = fromJust . flip lookup (zip (variables program) [0 ..])
+  fails :: [Int]
+  fails = [ a | (a, Fail) <- zip [0 ..] instrs ]
 
 -- State: '(instrMem dataMem callStack dataStack pc)
 utils :: [Expr]
@@ -214,10 +219,17 @@ assembleInstruction labelAddr varAddr' a = case a of
   Push      a     -> obj [codePush,      varAddr a                 ]
   Pop       a     -> obj [codePop,       varAddr a                 ]
   PushCont  a     -> obj [codePushCont,  labelAddr a               ]
-  Const     a b   -> obj [codeConst,     lit $ show a, varAddr b   ]
+  Const     a b   -> obj [codeConst,     lit $ showLit a, varAddr b   ]
   Intrinsic a b c -> obj [codeIntrinsic, encodeOp a,   obj (map varAddr b), varAddr c]
   where
   varAddr = fromIntegral . varAddr'
+
+showLit :: Literal -> String
+showLit a = case a of
+  LitInteger a -> show a
+  LitBool    True  -> "1"
+  LitBool    False -> "0"
+  a -> error $ "unsupported literal: " ++ show a
 
 encodeOp :: ExpOp -> Expr
 encodeOp a = case a of
