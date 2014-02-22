@@ -1,5 +1,5 @@
 .PHONY: all
-all: test.log
+all: factorial.log
 
 test.log: test.lisp
 	acl2 < test.lisp | tee test.log
@@ -20,7 +20,6 @@ dist/setup-config: src/Ivory/Compile/ACL2.hs src/Ivory/Compile/ACL2/*.hs
 .PHONY: clean
 clean:
 	cabal clean
-	-rm *.c *.h
 	-rm *.cps1
 	-rm *.cps2
 	-rm *.rtl
