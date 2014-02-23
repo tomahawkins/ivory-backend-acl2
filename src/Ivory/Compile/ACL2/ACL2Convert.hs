@@ -20,7 +20,9 @@ acl2Convert program@(Program instrs) = utils ++ instructionSemantics ++
   [ defthm ("fail-at-" ++ show a ++ "-thm") $ call ("fail-at-" ++ show a ++ "-fun") [n]              | a <- fails ]
   where
   labs :: Label -> Expr
-  labs = fromJust . flip lookup [ (a, fromIntegral b) | (a, b) <- labels program ]
+  labs l = case lookup l [ (a, fromIntegral b) | (a, b) <- labels program ] of
+    Nothing -> error $ "Label not found: " ++ l
+    Just a  -> a
   vars :: Var -> Int
   vars = fromJust . flip lookup (zip (variables program) [0 ..])
   fails :: [Int]

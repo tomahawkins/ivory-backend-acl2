@@ -1,72 +1,52 @@
 -- | Compiling Ivory to ACL2.
 module Ivory.Compile.ACL2
   ( compileModule
+  , verifyModule
+  , verifyModules
   ) where
 
 import Data.List
-import Text.Printf
+import System.IO
+import System.Process
 
+import Ivory.Compile.ACL2.ACL2 (Expr)
 import Ivory.Compile.ACL2.ACL2Convert
-import Ivory.Compile.ACL2.CPS (alphaConvert)
+import Ivory.Compile.ACL2.CPS (alphaConvert, Proc)
 import Ivory.Compile.ACL2.CPSConvert
+import Ivory.Compile.ACL2.RTL (Program)
 import Ivory.Compile.ACL2.RTLConvert
 import qualified Ivory.Language.Syntax.AST as I
-import Ivory.Language.Syntax.Names
-import Ivory.Language.Syntax.Type
+import Ivory.Language.Syntax.AST (Module (..), ExpOp)
 
-compileModule :: I.Module -> IO ()
-compileModule m = do
-  putStrLn $ showModule m
-  mapM_ (putStrLn . showProc) $ procs m
-  let cps1 = map cpsConvertProc $ procs m 
-      cps2 = alphaConvert cps1
-      rtl = rtlConvert cps2
-      acl2 = acl2Convert rtl
-      name = I.modName m
-  writeFile (name ++ ".cps1") $ unlines $ map show cps1
-  writeFile (name ++ ".cps2") $ unlines $ map show cps2
-  writeFile (name ++ ".rtl")  $ show rtl
-  writeFile (name ++ ".lisp") $ unlines $ map show acl2
+compileModule :: Module -> (String, [Proc ExpOp], [Proc ExpOp], Program ExpOp, [Expr])
+compileModule m = (name, cps1, cps2, rtl, acl2)
+  where
+  cps1 = map cpsConvertProc $ procs m 
+  cps2 = alphaConvert cps1
+  rtl = rtlConvert cps2
+  acl2 = acl2Convert rtl
+  name = modName m
+  procs :: I.Module -> [I.Proc]
+  procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)
+  --writeFile (name ++ ".cps1") $ unlines $ map show cps1
+  --writeFile (name ++ ".cps2") $ unlines $ map show cps2
+  --writeFile (name ++ ".rtl")  $ show rtl
+  --writeFile (name ++ ".lisp") $ unlines $ map show acl2
 
-showModule :: I.Module -> String
-showModule m = unlines
-  [ "modName        : " ++ (show $ I.modName        m)
-  , "modHeaders     : " ++ (show $ I.modHeaders     m)
-  , "modDepends     : " ++ (show $ I.modDepends     m)
-  , "modExterns     : " ++ (show $ I.modExterns     m)
-  , "modImports     : " ++ (show $ I.modImports     m)
-  , "modProcs       : " ++ (show $ I.modProcs       m)
-  , "modStructs     : " ++ (show $ I.modStructs     m)
-  , "modAreas       : " ++ (show $ I.modAreas       m)
-  , "modAreaImports : " ++ (show $ I.modAreaImports m)
-  , "modSourceDeps  : " ++ (show $ I.modSourceDeps  m)
-  ]
+verifyModule :: Module -> Bool -> IO Bool
+verifyModule m expectedPass = do
+  putStr $ "Verifying " ++ name ++ " ... "
+  hFlush stdout
+  (_, result, _) <- readProcessWithExitCode "acl2" [] (unlines $ map show acl2)
+  let pass = expectedPass == (not $ any (isPrefixOf "ACL2 Error") $ lines result)
+  putStrLn $ if pass then "pass" else "FAIL"
+  hFlush stdout
+  return pass
+  where
+  (name, _, _, _, acl2) = compileModule m
 
-procs :: I.Module -> [I.Proc]
-procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)
-
-showProc :: I.Proc -> String
-showProc p = unlines
-  [ printf "%s %s(%s)" (show $ I.procRetTy p) (I.procSym p) (intercalate ", " $ map showArg (I.procArgs p))
-  , block $ unlines $ map showStmt $ I.procBody p
-  ]
-
-showArg :: Typed Var -> String
-showArg a = show (tType a) ++ " " ++ varSym (tValue a)
-
-showStmt :: I.Stmt -> String
-showStmt a = case a of
-  I.IfTE a b c -> unlines
-    [ printf "if (%s)" $ show a
-    , block $ unlines $ map showStmt b
-    , "else"
-    , block $ unlines $ map showStmt c
-    ]
-  a -> show a
-
-indent :: String -> String
-indent = intercalate "\n" . map ("\t" ++) . lines
-
-block :: String -> String
-block a = "{\n" ++ indent a ++ "\n}\n"
+verifyModules :: [(Module, Bool)] -> IO Bool
+verifyModules m = do
+  pass <- sequence [ verifyModule a b | (a, b) <- m ]
+  return $ and pass
 
