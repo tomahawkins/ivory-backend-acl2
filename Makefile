@@ -1,6 +1,10 @@
 .PHONY: all
 all: verify
 
+.PHONY: verify
+verify: Factorial.hs dist/setup-config
+	runhaskell -W Factorial.hs
+
 test.log: test.lisp
 	acl2 < test.lisp | tee test.log
 
@@ -9,10 +13,6 @@ factorial.log: factorial.lisp
 
 test.lisp: Tests.hs dist/setup-config
 	runhaskell -W Tests.hs
-
-.PHONY: verify
-verify: Factorial.hs dist/setup-config
-	runhaskell -W Factorial.hs
 
 dist/setup-config: src/Ivory/Compile/ACL2.hs src/Ivory/Compile/ACL2/*.hs
 	cabal build

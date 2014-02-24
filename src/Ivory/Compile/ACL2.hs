@@ -40,6 +40,7 @@ verifyModule m expectedPass = do
   (_, result, _) <- readProcessWithExitCode "acl2" [] (unlines $ map show acl2)
   let pass = expectedPass == (not $ any (isPrefixOf "ACL2 Error") $ lines result)
   putStrLn $ if pass then "pass" else "FAIL"
+  writeFile (name ++ ".log") result
   hFlush stdout
   return pass
   where

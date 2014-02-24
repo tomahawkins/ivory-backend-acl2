@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 
 module Main (main) where
 
@@ -19,70 +20,74 @@ factorial  = proc "factorial" $ \ n ->
       (do ret n
       )
 
-main' :: Def ('[] :-> ())
-main' = proc "main" $ body $ do
-  --Q: All these assertions pass individually.  But if more are uncommented, runtime goes through the roof.  Why?
-  --a <- call factorial 3
-  --assert $ a ==? 6
-  --assert true
-  --assert $ 1 + 2 ==? (3 :: Sint32)
-  --assert $ 3 - 2 ==? (1 :: Sint32)
-  --assert $ (false .&& false) ==? false
-  --assert $ (false .&& true ) ==? false
-  --assert $ (true  .&& false) ==? false
-  --assert $ (true  .&& true ) ==? true 
-  --assert $ (false .|| false) ==? false
-  --assert $ (false .|| true ) ==? true
-  --assert $ (true  .|| false) ==? true
-  --assert $ (true  .|| true ) ==? true 
-  --assert $ true  ? (true , false)
-  --assert $ true  ? (true , true )
-  --assert $ false ? (false, true )
-  --assert $ false ? (true , true )
+type Stmt = forall s . Ivory (ProcEffects s ()) ()
 
-  -- This works.
-  a <- call factorial 1
-  assert $ a ==? 1
+-- Build a basic test given a name, whether the test should pass or fail, and an Ivory statement.
+basicTest :: String -> Bool -> Stmt -> (Module, Bool)
+basicTest name expected a = (package name $ incl $ proc "main" $ body $ a >> retVoid, expected)
 
-  -- This fails.  Why?
-  --a <- call factorial 2
-  --assert $ a ==? 2
+-- Build a test that uses the above factorial function.
+factorialTest :: String -> Bool -> Stmt -> (Module, Bool)
+factorialTest name expected a = (m, expected)
+  where
+  m = package name $ do
+    incl factorial
+    incl $ proc "main" $ body $ do
+      a
+      retVoid
 
-  retVoid
+-- A collection of some basic tests.
+basicTests :: [(String, Bool, Stmt)]
+basicTests =
+  [ f "basic00" True  $ assert true
+  , f "basic01" False $ assert false
+  , f "basic02" True  $ assert $ 1 + 2 ==? (3 :: Sint32)
+  , f "basic03" False $ assert $ 1 + 2 ==? (4 :: Sint32)
+  , f "basic04" True  $ assert $ 3 - 2 ==? (1 :: Sint32)
+  , f "basic05" False $ assert $ 2 - 2 ==? (1 :: Sint32)
+  , f "basic06" True  $ assert $ iNot false
+  , f "basic07" True  $ assert $ iNot $ iNot true
+  , f "basic08" False $ assert $ iNot $ iNot false
+  , f "basic09" False $ assert $ iNot $ iNot $ iNot true
+  , f "basic10" True  $ assert $ (false .&& false) ==? false
+  , f "basic11" True  $ assert $ (false .&& true ) ==? false
+  , f "basic12" True  $ assert $ (true  .&& false) ==? false
+  , f "basic13" True  $ assert $ (true  .&& true ) ==? true 
+  , f "basic14" True  $ assert $ (false .|| false) ==? false
+  , f "basic15" True  $ assert $ (false .|| true ) ==? true
+  , f "basic16" True  $ assert $ (true  .|| false) ==? true
+  , f "basic17" True  $ assert $ (true  .|| true ) ==? true 
+  , f "basic18" True  $ assert $ true  ? (true , false)
+  , f "basic19" True  $ assert $ true  ? (true , true )
+  , f "basic20" True  $ assert $ false ? (false, true )
+  , f "basic21" True  $ assert $ false ? (true , true )
+  ]
+  where
+  f :: String -> Bool -> Stmt -> (String, Bool, Stmt)
+  f a b c = (a, b, c)
 
-simple :: String -> Bool -> (forall s . Ivory (ProcEffects s ()) ()) -> (Module, Bool)
-simple name expected a = (package name $ incl $ proc "main" $ body $ a >> retVoid, expected)
+-- Combine all the positive tests above into one test.  (ACL2 can't handle the increased size.)
+combinedBasicTest :: (Module, Bool)
+combinedBasicTest = basicTest "combinedBasicTest" True $ sequence_ [ b | (_, a, b) <- basicTests, a ]
 
-module' :: Module
-module' = package "factorial" $ do
-  incl factorial
-  incl main'
+-- A couple tests of calling the factorial function.
+factorialTests :: [(Module, Bool)]
+factorialTests =
+  [ factorialTest "factorial1" True $ do
+      a <- call factorial 1
+      assert $ a ==? 1
+  , factorialTest "factorial2" True $ do
+      a <- call factorial 2
+      assert $ a ==? 2
+  ]
 
 main :: IO ()
 main = do
   result <- verifyModules
-    [ simple "01" True  $ assert true
-    , simple "01" False $ assert false
-    , simple "02" True  $ assert $ 1 + 2 ==? (3 :: Sint32)
-    , simple "02" False $ assert $ 1 + 2 ==? (4 :: Sint32)
-    , simple "03" True  $ assert $ 3 - 2 ==? (1 :: Sint32)
-    , simple "03" False $ assert $ 2 - 2 ==? (1 :: Sint32)
-    , simple "04" True  $ assert $ (false .&& false) ==? false
-    , simple "05" True  $ assert $ (false .&& true ) ==? false
-    , simple "06" True  $ assert $ (true  .&& false) ==? false
-    , simple "07" True  $ assert $ (true  .&& true ) ==? true 
-    , simple "08" True  $ assert $ (false .|| false) ==? false
-    , simple "09" True  $ assert $ (false .|| true ) ==? true
-    , simple "10" True  $ assert $ (true  .|| false) ==? true
-    , simple "11" True  $ assert $ (true  .|| true ) ==? true 
-    , simple "12" True  $ assert $ true  ? (true , false)
-    , simple "13" True  $ assert $ true  ? (true , true )
-    , simple "14" True  $ assert $ false ? (false, true )
-    , simple "15" True  $ assert $ false ? (true , true )
-    , (module', True)
-    ]
+    $  [ basicTest a b c | (a, b, c) <- basicTests ]
+    ++ factorialTests
+    -- ++ [combinedBasicTest]  -- This test is too large; ACL2 doesn't return.
   if result
     then putStrLn "Tests passed."
     else putStrLn "Tests failed."
-
 
