@@ -15,8 +15,12 @@ import Ivory.Language.Syntax.Type
 cpsConvertProc :: I.Proc -> Proc I.ExpOp
 cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) cont
   where
-  (cont, _) = runId $ runStateT (0, 0) $ cpsStmts (I.procBody p) Halt
-  --XXX Convert pre and post conditions into assertions.
+  (cont, _) = runId $ runStateT (0, 0) $ cpsStmts (requires ++ I.procBody p) Halt
+  requires = map (I.Assert . cond . I.getRequire) $ I.procRequires p
+  ensures  = map (I.Assert . cond . I.getEnsure ) $ I.procEnsures  p
+  cond a = case a of
+    I.CondBool a -> a
+    I.CondDeref _ _ _ _ -> error $ "CondDeref not supported."
 
 type CPS = StateT (Int, Int) Id
 

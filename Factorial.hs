@@ -8,17 +8,23 @@ module Main (main) where
 import Ivory.Language
 import Ivory.Compile.ACL2
 
+-- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)
-factorial  = proc "factorial" $ \ n ->
-  -- These are made up requires/ensures for testing purposes.
-  ensures (\r -> n <? r) $
-  body $
-    ifte_ (n >? 1)
-      (do n' <- call factorial (n - 1)
-          ret (n' * n)
-      )
-      (do ret n
-      )
+factorial  = proc "factorial" $ \ n -> body $
+  ifte_ (n >? 1)
+    (do n' <- call factorial (n - 1)
+        ret (n' * n)
+    )
+    (do ret n
+    )
+
+-- Limits a number between two bounds.
+limit :: Def ('[Sint32, Sint32, Sint32] :-> Sint32)
+limit = proc "limit" $ \ low high n ->
+  requires (low <=? high) $
+  ensures  (<=? high)     $
+  ensures  (>=? low)      $
+  body $ ifte_ (n >? high) (ret high) $ ifte_ (n <? low) (ret low) (ret n)
 
 type Stmt = forall s . Ivory (ProcEffects s ()) ()
 
@@ -26,12 +32,22 @@ type Stmt = forall s . Ivory (ProcEffects s ()) ()
 basicTest :: String -> Bool -> Stmt -> (Module, Bool)
 basicTest name expected a = (package name $ incl $ proc "main" $ body $ a >> retVoid, expected)
 
--- Build a test that uses the above factorial function.
+-- Build a test using the factorial function.
 factorialTest :: String -> Bool -> Stmt -> (Module, Bool)
 factorialTest name expected a = (m, expected)
   where
   m = package name $ do
     incl factorial
+    incl $ proc "main" $ body $ do
+      a
+      retVoid
+
+-- Build a test using the limit function.
+limitTest :: String -> Bool -> Stmt -> (Module, Bool)
+limitTest name expected a = (m, expected)
+  where
+  m = package name $ do
+    incl limit
     incl $ proc "main" $ body $ do
       a
       retVoid
@@ -81,11 +97,30 @@ factorialTests =
       assert $ a ==? 2
   ]
 
+-- Some tests calling the limit function.
+limitTests :: [(Module, Bool)]
+limitTests =
+  [ limitTest "limit1" True $ do
+      a <- call limit 32 48 56
+      assert $ a ==? 48
+  , limitTest "limit2" True $ do
+      a <- call limit 32 48 20
+      assert $ a ==? 32
+  , limitTest "limit3" True $ do
+      a <- call limit 32 48 42
+      assert $ a ==? 42
+  , limitTest "limit4" False $ do
+      a <- call limit 48 32 40
+      assert $ a ==? 32
+  ]
+
 main :: IO ()
 main = do
   result <- verifyModules
-    $  [ basicTest a b c | (a, b, c) <- basicTests ]
-    ++ factorialTests
+    $  []
+    -- $  [ basicTest a b c | (a, b, c) <- basicTests ]
+    -- ++ factorialTests
+    ++ limitTests
     -- ++ [combinedBasicTest]  -- This test is too large; ACL2 doesn't return.
   if result
     then putStrLn "Tests passed."
