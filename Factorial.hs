@@ -117,9 +117,8 @@ limitTests =
 main :: IO ()
 main = do
   result <- verifyModules
-    $  []
-    -- $  [ basicTest a b c | (a, b, c) <- basicTests ]
-    -- ++ factorialTests
+    $  [ basicTest a b c | (a, b, c) <- basicTests ]
+    ++ factorialTests
     ++ limitTests
     -- ++ [combinedBasicTest]  -- This test is too large; ACL2 doesn't return.
   if result

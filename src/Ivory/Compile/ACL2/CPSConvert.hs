@@ -15,12 +15,25 @@ import Ivory.Language.Syntax.Type
 cpsConvertProc :: I.Proc -> Proc I.ExpOp
 cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) cont
   where
-  (cont, _) = runId $ runStateT (0, 0) $ cpsStmts (requires ++ I.procBody p) Halt
+  (cont, _) = runId $ runStateT (0, 0) $ cpsStmts (requires ++ insertEnsures (I.procBody p)) Halt
   requires = map (I.Assert . cond . I.getRequire) $ I.procRequires p
   ensures  = map (I.Assert . cond . I.getEnsure ) $ I.procEnsures  p
   cond a = case a of
     I.CondBool a -> a
     I.CondDeref _ _ _ _ -> error $ "CondDeref not supported."
+
+  insertEnsures' :: I.Stmt -> [I.Stmt]
+  insertEnsures' a = case a of
+    I.IfTE a b c -> [I.IfTE a (insertEnsures b) (insertEnsures c)]
+    I.Loop a b c d -> [I.Loop a b c $ insertEnsures d]
+    I.Forever a -> [I.Forever $ insertEnsures a]
+    I.Return a -> ensures ++ [I.Return a]
+    I.ReturnVoid -> ensures ++ [I.ReturnVoid]
+    a -> [a]
+
+  insertEnsures :: [I.Stmt] -> [I.Stmt]
+  --insertEnsures = concatMap insertEnsures'
+  insertEnsures = id --XXX Inserting the ensures breaks ACL2.
 
 type CPS = StateT (Int, Int) Id
 
