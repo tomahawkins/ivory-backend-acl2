@@ -1,6 +1,7 @@
 -- | A DSL for ACL2.
 module Ivory.Compile.ACL2.ACL2
   ( Expr
+  , mutualRecursion
   , defun
   , defconst
   , defthm
@@ -49,6 +50,9 @@ sExpr :: Expr -> SExpr
 sExpr a = case a of
   Obj     a   -> SA $ map sExpr a
   Lit     a   -> SV a
+
+mutualRecursion :: [Expr] -> Expr
+mutualRecursion = call "mutual-recursion"
 
 defun :: String -> [String] -> Expr -> Expr
 defun name args body = call "defun" $ [var name, obj $ map var args, body]

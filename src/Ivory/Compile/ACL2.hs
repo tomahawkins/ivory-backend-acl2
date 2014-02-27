@@ -11,42 +11,44 @@ import System.Process
 
 import Ivory.Compile.ACL2.ACL2 (Expr)
 import Ivory.Compile.ACL2.ACL2Convert
-import Ivory.Compile.ACL2.CPS (alphaConvert, Proc)
+import Ivory.Compile.ACL2.ACL2Convert2
+import Ivory.Compile.ACL2.CPS (explicitStack)
 import Ivory.Compile.ACL2.CPSConvert
-import Ivory.Compile.ACL2.RTL (Program)
 import Ivory.Compile.ACL2.RTLConvert
 import qualified Ivory.Language.Syntax.AST as I
-import Ivory.Language.Syntax.AST (Module (..), ExpOp)
+import Ivory.Language.Syntax.AST (Module (..))
 
-compileModule :: Module -> (String, [Proc ExpOp], [Proc ExpOp], Program ExpOp, [Expr])
-compileModule m = (name, cps1, cps2, rtl, acl2)
+-- | Compiles a module to two different ACL2 representations: assembly and CPS.
+compileModule :: Module -> (String, [Expr], [Expr])
+compileModule m = (name, acl21, acl22)
   where
-  cps1 = map cpsConvertProc $ procs m 
-  cps2 = alphaConvert cps1
-  rtl = rtlConvert cps2
-  acl2 = acl2Convert rtl
+  cps1  = map cpsConvertProc $ procs m 
+  cps2  = map explicitStack cps1
+  rtl   = rtlConvert        cps2
+  acl21 = acl2Convert       rtl 
+  acl22 = acl2Convert2      cps2
   name = modName m
   procs :: I.Module -> [I.Proc]
   procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)
-  --writeFile (name ++ ".cps1") $ unlines $ map show cps1
-  --writeFile (name ++ ".cps2") $ unlines $ map show cps2
-  --writeFile (name ++ ".rtl")  $ show rtl
-  --writeFile (name ++ ".lisp") $ unlines $ map show acl2
 
-verifyModule :: Module -> Bool -> IO Bool
-verifyModule m expectedPass = do
+-- | Given a expected result, verifies a module.
+verifyModule :: Bool -> Module -> IO Bool
+verifyModule expected m = do
   putStr $ "Verifying " ++ name ++ " ... "
+  writeFile (name ++ ".lisp") acl2
   hFlush stdout
-  (_, result, _) <- readProcessWithExitCode "acl2" [] (unlines $ map show acl2)
-  let pass = expectedPass == (not $ any (isPrefixOf "ACL2 Error") $ lines result)
+  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2
+  let pass = expected == (not $ any (isPrefixOf "ACL2 Error") $ lines result)
   putStrLn $ if pass then "pass" else "FAIL"
   writeFile (name ++ ".log") result
   hFlush stdout
   return pass
   where
-  (name, _, _, _, acl2) = compileModule m
+  (name, acl2', _) = compileModule m
+  acl2 = unlines $ map show acl2'
 
-verifyModules :: [(Module, Bool)] -> IO Bool
+-- | Verifies a list of modules.
+verifyModules :: [(Bool, Module)] -> IO Bool
 verifyModules m = do
   pass <- sequence [ verifyModule a b | (a, b) <- m ]
   return $ and pass

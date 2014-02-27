@@ -21,6 +21,7 @@ library
     Ivory.Compile.ACL2,
     Ivory.Compile.ACL2.ACL2,
     Ivory.Compile.ACL2.ACL2Convert,
+    Ivory.Compile.ACL2.ACL2Convert2,
     Ivory.Compile.ACL2.CPS,
     Ivory.Compile.ACL2.CPSConvert,
     Ivory.Compile.ACL2.RTL,

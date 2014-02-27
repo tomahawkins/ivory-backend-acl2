@@ -1,4 +1,4 @@
--- | Compile CPS to ACL2.
+-- | Compile RTL to ACL2.
 module Ivory.Compile.ACL2.ACL2Convert
   ( acl2Convert
   ) where

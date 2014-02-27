@@ -15,7 +15,7 @@ import Ivory.Language.Syntax.Type
 cpsConvertProc :: I.Proc -> Proc I.ExpOp
 cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) cont
   where
-  (cont, _) = runId $ runStateT (0, 0) $ cpsStmts (requires ++ insertEnsures (I.procBody p)) Halt
+  (cont, _) = runId $ runStateT 0 $ cpsStmts (requires ++ insertEnsures (I.procBody p)) Halt
   requires = map (I.Assert . cond . I.getRequire) $ I.procRequires p
   ensures  = map (I.Assert . cond . I.getEnsure ) $ I.procEnsures  p
   cond a = case a of
@@ -32,35 +32,15 @@ cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) con
     a -> [a]
 
   insertEnsures :: [I.Stmt] -> [I.Stmt]
-  --insertEnsures = concatMap insertEnsures'
-  insertEnsures = id --XXX Inserting the ensures breaks ACL2.
+  insertEnsures = concatMap insertEnsures'
 
-type CPS = StateT (Int, Int) Id
+type CPS = StateT Int Id
 
 gensym :: CPS Var
 gensym = do
-  (i, l) <- get
-  set (i + 1, l)
+  i <- get
+  set $ i + 1
   return $ "_cpsConvert" ++ show i
-
-withLoop :: CPS a -> CPS a
-withLoop a = do
-  (i, l) <- get
-  set (i, l + 1)
-  a <- a
-  (i, l) <- get
-  set (i, l - 1)
-  return a
-
-popLoops :: Cont I.ExpOp -> CPS (Cont I.ExpOp)
-popLoops a = do
-  (_, l) <- get
-  return $ f l
-  where
-  f :: Int -> Cont I.ExpOp
-  f i
-    | i <= 0    = a
-    | otherwise = Pop $ f $ i - 1
 
 cpsStmts :: [I.Stmt] -> Cont I.ExpOp -> CPS (Cont I.ExpOp)
 cpsStmts a cont = case a of
@@ -72,13 +52,11 @@ cpsStmts a cont = case a of
         b <- cpsStmts b cont
         c <- cpsStmts c cont
         cpsExpr a $ \ a -> return $ If a b c
-      I.Return a   -> cpsExpr (tValue a) $ \ a -> popLoops $ Return $ Just a  -- This ignores cont (the rest of the function).  Is this ok?
-      I.ReturnVoid -> popLoops $ Return Nothing  -- Again, ignores cont.
+      I.Return a   -> cpsExpr (tValue a) $ \ a -> return $ Return $ Just a  -- This ignores cont (the rest of the function).  Is this ok?
+      I.ReturnVoid -> return $ Return Nothing  -- Again, ignores cont.
       I.Assert         a -> cpsExpr a $ \ a -> return $ Assert a cont
       I.CompilerAssert a -> cpsExpr a $ \ a -> return $ Assert a cont
       I.Assume         a -> cpsExpr a $ \ a -> return $ Assume a cont
-      I.Deref  _ a b -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont
-      I.Store  _ a b -> cpsExpr a $ \ a -> cpsExpr b $ \ b -> return $ Store a b cont  -- Assumes a is evaluated before b in a = b.
       I.Assign _ a b -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont
       I.Local  _ a (I.InitExpr _ b) -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont  
       I.Call _ Nothing fun args -> f [] $ map tValue args
@@ -93,24 +71,7 @@ cpsStmts a cont = case a of
         f args a = case a of
           [] -> return $ Call (nameSym fun) args $ Let (varSym result) (Var "retval") cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
-      I.Forever a -> do
-        loop <- withLoop $ cpsStmts a Halt
-        return $ Forever loop cont
-      I.Break -> do
-        return $ Return Nothing
-      -- XXX Should rewrite loops into forevers with breaks.
-      I.Loop v i incr block -> cpsExpr i $ \ i -> cpsExpr to $ \ to -> do
-        loop <- withLoop $ cpsStmts block Halt
-        return $ Loop (varSym v) i up to loop cont
-        where
-        (up, to) = case incr of
-          I.IncrTo to -> (True , to)
-          I.DecrTo to -> (False, to)
-      I.RefCopy  _ _ _ -> error "RefCopy not supported."
-      I.AllocRef _ _ _ -> error "AllocRef not supported."
-      I.Local _ _ I.InitZero -> error "Local _ _ InitZero not supported."
-      I.Local _ _ (I.InitStruct _) -> error "Local _ _ (InitStruct _) not supported."
-      I.Local _ _ (I.InitArray _) -> error "Local _ _ (InitArray _) not supported."
+      a -> error $ "Unsupported statement: " ++ show a
 
 cpsExpr :: I.Expr -> (Var -> CPS (Cont I.ExpOp)) -> CPS (Cont I.ExpOp)
 cpsExpr a k = case a of

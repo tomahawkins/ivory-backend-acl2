@@ -29,12 +29,12 @@ limit = proc "limit" $ \ low high n ->
 type Stmt = forall s . Ivory (ProcEffects s ()) ()
 
 -- Build a basic test given a name, whether the test should pass or fail, and an Ivory statement.
-basicTest :: String -> Bool -> Stmt -> (Module, Bool)
-basicTest name expected a = (package name $ incl $ proc "main" $ body $ a >> retVoid, expected)
+basicTest :: String -> Bool -> Stmt -> (Bool, Module)
+basicTest name expected a = (expected, package name $ incl $ proc "main" $ body $ a >> retVoid)
 
 -- Build a test using the factorial function.
-factorialTest :: String -> Bool -> Stmt -> (Module, Bool)
-factorialTest name expected a = (m, expected)
+factorialTest :: String -> Bool -> Stmt -> (Bool, Module)
+factorialTest name expected a = (expected, m)
   where
   m = package name $ do
     incl factorial
@@ -43,8 +43,8 @@ factorialTest name expected a = (m, expected)
       retVoid
 
 -- Build a test using the limit function.
-limitTest :: String -> Bool -> Stmt -> (Module, Bool)
-limitTest name expected a = (m, expected)
+limitTest :: String -> Bool -> Stmt -> (Bool, Module)
+limitTest name expected a = (expected, m)
   where
   m = package name $ do
     incl limit
@@ -83,11 +83,11 @@ basicTests =
   f a b c = (a, b, c)
 
 -- Combine all the positive tests above into one test.  (ACL2 can't handle the increased size.)
-combinedBasicTest :: (Module, Bool)
-combinedBasicTest = basicTest "combinedBasicTest" True $ sequence_ [ b | (_, a, b) <- basicTests, a ]
+--combinedBasicTest :: (Bool, Module)
+--combinedBasicTest = basicTest "combinedBasicTest" True $ sequence_ [ b | (_, a, b) <- basicTests, a ]
 
 -- A couple tests of calling the factorial function.
-factorialTests :: [(Module, Bool)]
+factorialTests :: [(Bool, Module)]
 factorialTests =
   [ factorialTest "factorial1" True $ do
       a <- call factorial 1
@@ -95,10 +95,13 @@ factorialTests =
   , factorialTest "factorial2" True $ do
       a <- call factorial 2
       assert $ a ==? 2
+  , factorialTest "factorial3" True $ do
+      a <- call factorial 3
+      assert $ a ==? 6
   ]
 
 -- Some tests calling the limit function.
-limitTests :: [(Module, Bool)]
+limitTests :: [(Bool, Module)]
 limitTests =
   [ limitTest "limit1" True $ do
       a <- call limit 32 48 56
@@ -110,14 +113,15 @@ limitTests =
       a <- call limit 32 48 42
       assert $ a ==? 42
   , limitTest "limit4" False $ do
-      a <- call limit 48 32 40
-      assert $ a ==? 32
+      _ <- call limit 48 32 40  -- Check that the precondition fails.
+      return ()
   ]
 
 main :: IO ()
 main = do
   result <- verifyModules
-    $  [ basicTest a b c | (a, b, c) <- basicTests ]
+    $  []
+    ++ [ basicTest a b c | (a, b, c) <- basicTests ]
     ++ factorialTests
     ++ limitTests
     -- ++ [combinedBasicTest]  -- This test is too large; ACL2 doesn't return.

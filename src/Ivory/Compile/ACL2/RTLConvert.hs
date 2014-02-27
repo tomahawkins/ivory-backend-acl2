@@ -11,7 +11,7 @@ import qualified Ivory.Compile.ACL2.RTL as R
 
 type RTL i = R.RTL [Proc i] i
 
--- | Convert a list of alpha-converted CPS procedures to an RTL program.
+-- | Convert a list of CPS procedures converted with an explicit stack to an RTL program.
 rtlConvert :: [Proc i] -> Program i
 rtlConvert procs = snd $ elaborate procs $ do
   label "start"
@@ -32,9 +32,6 @@ cont a = case a of
   Call f args k -> do
     procs <- getMeta
     let argVars = head [ args | Proc name args _ <- procs, name == f ] 
-        vars  = contFreeVars k
-    comment "Pushing variables that are needed for after the call returns."
-    sequence_ [ push a | a <- vars ]
     kLabel <- genVar
     comment "Push the continuation."
     pushCont kLabel
@@ -44,20 +41,20 @@ cont a = case a of
     jump f
     comment "On return from function..."
     label kLabel
-    comment "Restore needed variables."
-    sequence_ [ pop a | a <- reverse vars ]
     comment "Execute the continuation after the call."
     cont k
 
   C.Return Nothing  -> return'
   C.Return (Just a) -> copy a "retval" >> return'
 
+  C.Push a b -> push a >> cont b
+
   Let a b c -> do
     case b of
       Var b              -> copy  b a
       Literal b          -> const' b a
+      C.Pop              -> pop a
       C.Intrinsic i args -> intrinsic i args a
-      Deref _            -> error "Deref not supported."
     cont c
 
   If a b c -> do
@@ -77,9 +74,4 @@ cont a = case a of
     cont b
 
   Assume a b -> cont $ Assert a b
-
-  C.Pop _          -> error "Pop not supported."
-  Store _ _ _      -> error "Store not supported."
-  Forever _ _      -> error "Forever not supported."
-  Loop _ _ _ _ _ _ -> error "Loop not supported."
 
