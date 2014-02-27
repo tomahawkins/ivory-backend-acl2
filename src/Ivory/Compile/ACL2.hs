@@ -34,18 +34,30 @@ compileModule m = (name, acl21, acl22)
 -- | Given a expected result, verifies a module.
 verifyModule :: Bool -> Module -> IO Bool
 verifyModule expected m = do
-  putStr $ "Verifying " ++ name ++ " ... "
-  writeFile (name ++ ".lisp") acl2
+  writeFile (name ++ ".lisp") acl2CPS
+
+  putStr $ "Verifying termination of: " ++ name ++ " ... "
   hFlush stdout
-  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2
+  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2CPS
+  let terminates = not $ any (isPrefixOf "ACL2 Error") $ lines result
+  putStrLn $ if terminates then "pass" else "FAIL"
+  writeFile (name ++ "_termination.log") result
+  hFlush stdout
+
+  putStr $ "Verifying assertions of:  " ++ name ++ " ... "
+  hFlush stdout
+  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2Asm
   let pass = expected == (not $ any (isPrefixOf "ACL2 Error") $ lines result)
   putStrLn $ if pass then "pass" else "FAIL"
-  writeFile (name ++ ".log") result
+  writeFile (name ++ "_assertions.log") result
   hFlush stdout
-  return pass
+
+  return $ terminates && pass
+
   where
-  (name, acl2', _) = compileModule m
-  acl2 = unlines $ map show acl2'
+  (name, acl2Asm', acl2CPS') = compileModule m
+  acl2Asm = unlines $ map show acl2Asm'
+  acl2CPS = unlines $ map show acl2CPS'
 
 -- | Verifies a list of modules.
 verifyModules :: [(Bool, Module)] -> IO Bool

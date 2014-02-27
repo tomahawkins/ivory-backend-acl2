@@ -8,6 +8,7 @@ module Ivory.Compile.ACL2.ACL2
   , call
   , obj
   , quote
+  , consp
   , cons
   , car
   , cdr
@@ -71,6 +72,9 @@ obj = Obj
 
 quote :: Expr -> Expr
 quote a = call "quote" [a]
+
+consp :: Expr -> Expr
+consp a = call "consp" [a]
 
 cons :: Expr -> Expr -> Expr
 cons a b = call "cons" [a, b]
