@@ -1,6 +1,7 @@
 -- | Compile RTL to ACL2.
 module Ivory.Compile.ACL2.ACL2Convert
   ( acl2Convert
+  , showLit
   ) where
 
 import Data.Maybe (fromJust)

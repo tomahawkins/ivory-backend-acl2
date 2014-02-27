@@ -6,17 +6,28 @@ module Ivory.Compile.ACL2.ACL2Convert2
 import MonadLib
 
 import Ivory.Compile.ACL2.ACL2
+import Ivory.Compile.ACL2.ACL2Convert (showLit)
 import Ivory.Compile.ACL2.CPS
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
 type CN = StateT (Int, [Expr]) Id
 
 acl2Convert2 :: [Proc ExpOp] -> [Expr]
-acl2Convert2 procs = [mutualRecursion $ assert : callCont : defs]
+acl2Convert2 procs = [opt1, opt2, opt3, assert, mutualRecursion $ callCont : defs, start]
   where
   ((), (n, defs)) = runId $ runStateT (0, []) $ mapM_ proc procs
+  opt1 = call "set-irrelevant-formals-ok"     [lit "t"]
+  opt2 = call "set-ignore-ok"                 [lit "t"]
+  opt3 = call "set-bogus-mutual-recursion-ok" [lit "t"]
+  start = defun "start" [] $ call "main" [nil]
   assert = defun "assert-cond" ["a", "b"] $ var "b"
-  callCont = defun "call-cont" ["stack", "retval"] $ case' (car stack) [ (lit $ show $ "_cont_" ++ show i, call ("_cont_" ++ show i) [cdr stack, var "retval"]) | i <- [0 .. n - 1] ] nil
+  callCont = defun "call-cont" ["stack", "retval"] $ f [0 .. n - 1]
+  f :: [Int] -> Expr
+  f a = case a of
+    [] -> nil
+    a : b -> if' (equal (car stack) $ lit $ show a') (call a' [cdr stack, var "retval"]) (f b)
+      where
+      a' = "_cont_" ++ show a
 
 proc :: Proc ExpOp -> CN ()
 proc (Proc name args body) = do { body <- cont body; addFun name ("stack" : args) body }
@@ -48,7 +59,7 @@ cont a = case a of
     c <- cont c
     case b of
       Var     b -> return $ let' [(a, var b)] c
-      Literal b -> return $ let' [(a, lit $ show b)] c
+      Literal b -> return $ let' [(a, lit $ showLit b)] c
       Pop       -> return $ let' [(a, car stack), ("stack", cdr stack)] c
       Intrinsic i args -> return $ let' [(a, b)] c
         where
