@@ -53,7 +53,7 @@ cont a = case a of
   Halt         -> return nil
   Assert a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
   Assume a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
-  If     a b c -> do { b <- cont b; c <- cont c; return $ if' (var a) b c }
+  If     a b c -> do { b <- cont b; c <- cont c; return $ if' (zip' $ var a) c b }
   Push   a b   -> do { b <- cont b; return $ let' [("stack", cons (var a) stack)] b }
   Let    a b c -> do
     c <- cont c
