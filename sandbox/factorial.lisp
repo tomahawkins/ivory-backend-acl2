@@ -1,7 +1,6 @@
 (mutual-recursion
   ; Pop the continuation name off the stack and call it with the return value, else return the return value.
   (defun call-cont (stack retval)
-    (declare (xargs :measure (len stack)))
     (if (and (consp stack) (equal (car stack) "factorial-cont"))
       (factorial-cont (cdr stack) retval)
       retval
@@ -11,8 +10,10 @@
   ; The continuation of the factorial function.  Restores the input argument 'n' from the stack
   ; and multiplies it with the result of the recursive call.
   (defun factorial-cont (stack retval)
-    (declare (xargs :measure (len stack)))
-    (call-cont (cdr stack) (* (car stack) retval))
+    (if (consp stack)
+      (call-cont (cdr stack) (* (car stack) retval))
+      retval
+    )
   )
 )
 

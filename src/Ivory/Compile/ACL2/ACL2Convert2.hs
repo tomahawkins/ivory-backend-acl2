@@ -8,26 +8,51 @@ import MonadLib
 import Ivory.Compile.ACL2.ACL2
 import Ivory.Compile.ACL2.ACL2Convert (showLit)
 import Ivory.Compile.ACL2.CPS
+import Ivory.Compile.ACL2.RecTopoSort
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
 type CN = StateT (Int, [Expr]) Id
 
 acl2Convert2 :: [Proc ExpOp] -> [Expr]
-acl2Convert2 procs = [opt1, opt2, opt3, assert, mutualRecursion $ callCont : defs, start]
+acl2Convert2 procs = [opt1, opt2] ++ mutualRecGroups
   where
   ((), (n, defs)) = runId $ runStateT (0, []) $ mapM_ proc procs
-  opt1 = call "set-irrelevant-formals-ok"     [lit "t"]
-  opt2 = call "set-ignore-ok"                 [lit "t"]
-  opt3 = call "set-bogus-mutual-recursion-ok" [lit "t"]
-  start = defun "start" [] $ call "main" [nil]
-  assert = defun "assert-cond" ["a", "b"] $ var "b"
+  opt1     = call "set-irrelevant-formals-ok"     [lit "t"]
+  opt2     = call "set-ignore-ok"                 [lit "t"]
+  start    = defun "start" [] $ call "main" [nil]
+  assert   = defun "assert-cond" ["a", "b"] $ var "b"
   callCont = defun "call-cont" ["stack", "retval"] $ f [0 .. n - 1]
-  f :: [Int] -> Expr
-  f a = case a of
-    [] -> nil
-    a : b -> if' (equal (car stack) $ lit $ show a') (call a' [cdr stack, var "retval"]) (f b)
-      where
-      a' = "_cont_" ++ show a
+    where
+    f :: [Int] -> Expr
+    f a = case a of
+      [] -> retval
+      a : b -> if' (and' (consp stack) $ equal (car stack) $ lit $ show a') (call a' [cdr stack, retval]) (f b)
+        where
+        a' = "_cont_" ++ show a
+  defuns = assert : callCont : defs ++ [start]
+
+  defunNames :: [String]
+  defunNames = [ name | Obj (Lit "defun" : Lit name : _) <- defuns ]
+
+  def :: String -> Expr
+  def name = case [ d | d@(Obj (Lit "defun" : Lit f : _)) <- defuns, f == name ] of
+    [d] -> d
+    _ -> error $ "Problem finding function: " ++ name
+
+  callees :: Expr -> [Expr]
+  callees = map def . filter (flip elem defunNames) . f
+    where 
+    f :: Expr -> [String]
+    f a = case a of
+      Obj a -> concatMap f a
+      Lit a -> [a]
+  
+  mutualRec :: [Expr] -> Expr
+  mutualRec a = case a of
+    [a] -> a
+    a   -> mutualRecursion a
+
+  mutualRecGroups = map mutualRec $ recTopoSort callees defuns
 
 proc :: Proc ExpOp -> CN ()
 proc (Proc name args body) = do { body <- cont body; addFun name ("stack" : args) body }
@@ -48,7 +73,7 @@ cont a = case a of
   Call f args ret -> do
     name <- genContName
     ret  <- cont ret
-    addFun name ["stack", "retval"] ret
+    addFun name ["stack", "retval"] $ if' (consp stack) ret retval
     return $ call f $ cons (lit $ show name) stack : map var args
   Halt         -> return nil
   Assert a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
@@ -85,5 +110,6 @@ cont a = case a of
   Return (Just a) -> return $ call "call-cont" [stack, var a]
   Return Nothing  -> return $ call "call-cont" [stack, nil]
 
-stack :: Expr
-stack = var "stack"
+stack  = var "stack"
+retval = var "retval"
+

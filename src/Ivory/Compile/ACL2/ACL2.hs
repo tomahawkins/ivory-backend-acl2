@@ -1,6 +1,6 @@
 -- | A DSL for ACL2.
 module Ivory.Compile.ACL2.ACL2
-  ( Expr
+  ( Expr (..)
   , mutualRecursion
   , defun
   , defconst
@@ -34,7 +34,7 @@ import Ivory.Compile.ACL2.SExpr
 data Expr
   = Obj [Expr]
   | Lit String
-  deriving Eq
+  deriving (Eq, Ord)
 
 instance Show Expr where show = show . sExpr
 
