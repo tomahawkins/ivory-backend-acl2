@@ -1,27 +1,27 @@
 -- | Recursive topological sort.
 module Ivory.Compile.ACL2.RecTopoSort
   ( recTopoSort
+  , allDependencies
   ) where
 
 import Data.Function (on)
 import Data.List (nub, sort, sortBy)
 
+-- | Topological sort of recursive functions.
 recTopoSort :: (Eq a, Ord a) => (a -> [a]) -> [a] -> [[a]]
-recTopoSort callees funs = f [] funs
+recTopoSort callees = filter (not . null) . f [] . sortBy (compare `on` length) . map (allDependencies callees)
   where
-  --f :: Eq a => [[a]] -> [a] -> [[a]]
-  f sofar remaining
-    | null remaining = sofar
-    | otherwise      = f (sofar ++ [next]) $ filter (not . flip elem next) remaining
-    where
-    next = head $ sortBy (compare `on` length) $ map (allCallees callees) remaining
+  f sofar a = case a of
+    [] -> []
+    a : b -> [ a | a <- a, not $ elem a sofar ] : f (nub $ a ++ sofar) b
 
-allCallees :: (Eq a, Ord a) => (a -> [a]) -> a -> [a]
-allCallees callees a = f [a]
+-- | All the dependencies for a given functions, including that function.
+allDependencies :: (Eq a, Ord a) => (a -> [a]) -> a -> [a]
+allDependencies callees a = f [a]
   where
   f sofar
     | sofar == next = sofar
     | otherwise     = f next
     where
-    next = sort $ nub $ concatMap callees sofar
+    next = sort $ nub $ sofar ++ concatMap callees sofar
 

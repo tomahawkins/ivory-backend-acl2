@@ -39,6 +39,7 @@ acl2Convert2 procs = [opt1, opt2] ++ mutualRecGroups
     [d] -> d
     _ -> error $ "Problem finding function: " ++ name
 
+  -- XXX This is not strictly correct.  It blindingly grabs all names, ignoring names introduced with lets.
   callees :: Expr -> [Expr]
   callees = map def . filter (flip elem defunNames) . f
     where 
