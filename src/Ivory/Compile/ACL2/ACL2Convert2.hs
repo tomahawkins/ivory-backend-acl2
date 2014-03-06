@@ -3,6 +3,7 @@ module Ivory.Compile.ACL2.ACL2Convert2
   ( acl2Convert2
   ) where
 
+import Data.Maybe (fromJust)
 import MonadLib
 
 import Ivory.Compile.ACL2.ACL2
@@ -11,25 +12,25 @@ import Ivory.Compile.ACL2.CPS
 import Ivory.Compile.ACL2.RecTopoSort
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
-type CN = StateT (Int, [Expr]) Id
+type CN = StateT (Int, [Expr], [(String, Expr)]) Id
 
 acl2Convert2 :: [Proc ExpOp] -> [Expr]
 acl2Convert2 procs = [opt1, opt2] ++ mutualRecGroups
   where
-  ((), (n, defs)) = runId $ runStateT (0, []) $ mapM_ proc procs
+  ((), (n, funs, conts)) = runId $ runStateT (0, [], []) $ mapM_ proc procs
   opt1     = call "set-irrelevant-formals-ok"     [lit "t"]
   opt2     = call "set-ignore-ok"                 [lit "t"]
   start    = defun "start" [] $ call "main" [nil]
   assert   = defun "assert-cond" ["a", "b"] $ var "b"
-  callCont = defun "call-cont" ["stack", "retval"] $ f [0 .. n - 1]
+  callCont = defun "call-cont" ["stack", "retval"] $ if' (consp stack) (f [0 .. n - 1]) retval
     where
     f :: [Int] -> Expr
     f a = case a of
       [] -> retval
-      a : b -> if' (and' (consp stack) $ equal (car stack) $ lit $ show a') (call a' [cdr stack, retval]) (f b)
+      a : b -> if' (equal (car stack) $ lit $ show a') (let' [("stack", cdr stack)] $ fromJust (lookup a' conts)) (f b)
         where
         a' = "_cont_" ++ show a
-  defuns = assert : callCont : defs ++ [start]
+  defuns = assert : callCont : funs ++ [start]
 
   defunNames :: [String]
   defunNames = [ name | Obj (Lit "defun" : Lit name : _) <- defuns ]
@@ -56,25 +57,32 @@ acl2Convert2 procs = [opt1, opt2] ++ mutualRecGroups
   mutualRecGroups = map mutualRec $ recTopoSort callees defuns
 
 proc :: Proc ExpOp -> CN ()
-proc (Proc name args body) = do { body <- cont body; addFun name ("stack" : args) body }
+proc (Proc name args body) = do
+  body <- cont body
+  addFun name ("stack" : args) $ if' (foldl (and') t $ map (integerp . var) args) body nil
 
 genContName :: CN String
 genContName = do
-  (i, a) <- get
-  set (i + 1, a)
+  (i, f, c) <- get
+  set (i + 1, f, c)
   return $ "_cont_" ++ show i
 
 addFun :: String -> [String] -> Expr -> CN ()
 addFun name args body = do
-  (i, a) <- get
-  set (i, a ++ [defun name args body])
+  (i, f, c) <- get
+  set (i, f ++ [defun name args body], c)
+
+addCont :: String -> Expr -> CN ()
+addCont name body = do  -- stack and retval are free in body.
+  (i, f, c) <- get
+  set (i, f, c ++ [(name, body)])
 
 cont :: Cont ExpOp -> CN Expr
 cont a = case a of
   Call f args ret -> do
     name <- genContName
     ret  <- cont ret
-    addFun name ["stack", "retval"] $ if' (consp stack) ret retval
+    addCont name ret
     return $ call f $ cons (lit $ show name) stack : map var args
   Halt         -> return nil
   Assert a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
@@ -94,9 +102,9 @@ cont a = case a of
           ExpNeq  _        -> if' (not' (equal (arg 0) (arg 1))) 1 0
           ExpCond          -> if' (zip' (arg 0)) (arg 2) (arg 1)
           ExpGt   False _  -> if' (call ">"  [arg 0, arg 1]) 1 0
-          ExpGt   True  _  -> if' (call ">"  [arg 0, arg 1]) 1 0
+          ExpGt   True  _  -> if' (call ">=" [arg 0, arg 1]) 1 0
           ExpLt   False _  -> if' (call "<"  [arg 0, arg 1]) 1 0
-          ExpLt   True  _  -> if' (call "<"  [arg 0, arg 1]) 1 0
+          ExpLt   True  _  -> if' (call "<=" [arg 0, arg 1]) 1 0
           ExpNot           -> if' (zip' (arg 0)) 1 0
           ExpAnd           -> if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1
           ExpOr            -> if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1

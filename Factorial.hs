@@ -12,11 +12,11 @@ import Ivory.Compile.ACL2
 factorial :: Def ('[Sint32] :-> Sint32)
 factorial  = proc "factorial" $ \ n -> body $
   ifte_ (n >? 1)
-    (do n' <- call factorial (n - 1)
-        ret (n' * n)
-    )
-    (do ret n
-    )
+   (do n' <- call factorial (n - 1)
+       ret (n' * n)
+   )
+   (do ret n)
+  
 
 -- Limits a number between two bounds.
 limit :: Def ('[Sint32, Sint32, Sint32] :-> Sint32)

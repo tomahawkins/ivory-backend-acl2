@@ -17,7 +17,10 @@ cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) con
   where
   (cont, _) = runId $ runStateT 0 $ cpsStmts (requires ++ insertEnsures (I.procBody p)) Halt
   requires = map (I.Assert . cond . I.getRequire) $ I.procRequires p
-  ensures  = map (I.Assert . cond . I.getEnsure ) $ I.procEnsures  p
+  ensures :: I.Expr -> I.Stmt
+  --XXX Need to replace replace all the retvals in ensures conditions with the return expression.
+  --ensures  = map (I.Assert . cond . I.getEnsure ) $ I.procEnsures  p
+  ensures = const $ I.Assert $ I.ExpLit $ I.LitBool True
   cond a = case a of
     I.CondBool a -> a
     I.CondDeref _ _ _ _ -> error $ "CondDeref not supported."
@@ -27,8 +30,8 @@ cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) con
     I.IfTE a b c -> [I.IfTE a (insertEnsures b) (insertEnsures c)]
     I.Loop a b c d -> [I.Loop a b c $ insertEnsures d]
     I.Forever a -> [I.Forever $ insertEnsures a]
-    I.Return a -> ensures ++ [I.Return a]
-    I.ReturnVoid -> ensures ++ [I.ReturnVoid]
+    I.Return a   -> [ensures $ tValue a, I.Return a]
+    I.ReturnVoid -> [I.ReturnVoid]
     a -> [a]
 
   insertEnsures :: [I.Stmt] -> [I.Stmt]

@@ -19,6 +19,7 @@ module Ivory.Compile.ACL2.ACL2
   , var
   , lit
   , nil
+  , t
   , zp
   , zip'
   , undefined'
@@ -27,6 +28,7 @@ module Ivory.Compile.ACL2.ACL2
   , and'
   , or'
   , goodbye
+  , integerp
   ) where
 
 import Ivory.Compile.ACL2.SExpr
@@ -100,6 +102,9 @@ lit = Lit
 nil :: Expr
 nil = Lit "nil"
 
+t :: Expr
+t = Lit "t"
+
 if' :: Expr -> Expr -> Expr -> Expr
 if' a b c = call "if" [a, b, c]
 
@@ -111,6 +116,9 @@ zp a = call "zp" [a]
 
 zip' :: Expr -> Expr
 zip' a = call "zip" [a]
+
+integerp :: Expr -> Expr
+integerp a = call "integerp" [a]
 
 undefined' :: Expr
 undefined' = Lit "undefined"
