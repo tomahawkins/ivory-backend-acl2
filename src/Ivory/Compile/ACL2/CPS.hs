@@ -69,26 +69,27 @@ instance Show a => Show (Value a) where
 
 -- | Continuations.
 data Cont a
-  = Halt                               -- ^ End the program or loop.
-  | Call    Var [Var] (Cont a)         -- ^ Push the continuation onto the stack and call a function with arguments.
-  | Return  (Maybe Var)                -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
-  | Push    Var (Cont a)               -- ^ Push a value onto the stack.
-  | Let     Var (Value a) (Cont a)     -- ^ Brings a new variable into scope and assigns it a value.
-  | If      Var (Cont a) (Cont a)      -- ^ Conditionally follow one continuation or another.
-  | Assert  Var (Cont a)               -- ^ Assert a value and continue.
-  | Assume  Var (Cont a)               -- ^ State an assumption and continue.
+  = Halt                                -- ^ End the program or loop.
+  | Call    Var [Var] (Maybe (Cont a))  -- ^ Push the continuation onto the stack (if one exists) and call a function with arguments.
+  | Return  (Maybe Var)                 -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
+  | Push    Var (Cont a)                -- ^ Push a value onto the stack.
+  | Let     Var (Value a) (Cont a)      -- ^ Brings a new variable into scope and assigns it a value.
+  | If      Var (Cont a) (Cont a)       -- ^ Conditionally follow one continuation or another.
+  | Assert  Var (Cont a)                -- ^ Assert a value and continue.
+  | Assume  Var (Cont a)                -- ^ State an assumption and continue.
 
 instance Show a => Show (Cont a) where
   show a = case a of
-    Halt             -> "halt\n"
-    Call    a b c    -> printf "%s(%s)\n%s" a (intercalate ", " b) (show c)
-    Return  (Just a) -> printf "return %s\n" a
-    Return  Nothing  -> "return\n"
-    Push    a b      -> printf "push %s\n" a ++ show b
-    If      a b c    -> printf "if (%s)\n" a ++ indent (show b) ++ "\nelse\n" ++ indent (show c)
-    Assert  a b      -> printf "assert %s\n%s" a (show b)
-    Assume  a b      -> printf "assume %s\n%s" a (show b)
-    Let     a b c    -> printf "let %s = %s\n%s" a (show b) (show c)
+    Halt                 -> "halt\n"
+    Call    a b Nothing  -> printf "%s(%s)\n" a (intercalate ", " b)
+    Call    a b (Just c) -> printf "%s(%s)\n%s" a (intercalate ", " b) (show c)
+    Return  (Just a)     -> printf "return %s\n" a
+    Return  Nothing      -> "return\n"
+    Push    a b          -> printf "push %s\n" a ++ show b
+    If      a b c        -> printf "if (%s)\n" a ++ indent (show b) ++ "\nelse\n" ++ indent (show c)
+    Assert  a b          -> printf "assert %s\n%s" a (show b)
+    Assume  a b          -> printf "assume %s\n%s" a (show b)
+    Let     a b c        -> printf "let %s = %s\n%s" a (show b) (show c)
     where
     indent :: String -> String
     indent = intercalate "\n" . map ("\t" ++) . lines
@@ -103,7 +104,7 @@ variables = nub . ("retval" :) . concatMap proc
   cont :: Cont i -> [Var]
   cont a = case a of
     Halt             -> []
-    Call    _ a b    -> a ++ cont b
+    Call    _ a b    -> a ++ case b of { Nothing -> []; Just b -> cont b }
     Return  (Just a) -> [a]
     Return  Nothing  -> []
     Push    a b      -> a : cont b
@@ -124,7 +125,7 @@ contFreeVars = nub . cont ["retval"]
   where
   cont :: [Var] -> Cont a -> [Var]
   cont i a = case a of
-    Call    _ args a -> concatMap var args ++ cont i a
+    Call    _ args a -> concatMap var args ++ case a of { Nothing -> []; Just a -> cont i a }
     Return  _        -> []
     Push    a b      -> var a ++ cont i b
     Let     a b c    -> vars ++ cont (a : i) c
@@ -175,7 +176,8 @@ alphaConvert procs = fst $ runId $ runStateT (0, undefined) $ mapM proc procs
   cont :: Cont i -> Alpha (Cont i)
   cont a = case a of
     Halt             -> return Halt
-    Call    a b c    -> do { b <- mapM ref b; c <- cont c; return $ Call a b c }
+    Call    a b Nothing    -> do { b <- mapM ref b;              return $ Call a b Nothing }
+    Call    a b (Just c)   -> do { b <- mapM ref b; c <- cont c; return $ Call a b $ Just c }
     Return  (Just a) -> do { a <- ref a; return $ Return $ Just a }
     Return  Nothing  -> do { return $ Return Nothing }
     Push    a b      -> do { a <- ref a; b <- cont b; return $ Push a b }
@@ -198,22 +200,23 @@ explicitStack (Proc name args body) = Proc name args $ cont body
   where
   cont :: Cont i -> Cont i
   cont a = case a of
-    Call a b c -> f1 freeVars
+    Call a b (Just c) -> f1 freeVars
       where
       freeVars = contFreeVars c
       f1 vars = case vars of
-        [] -> Call a b $ f2 $ reverse freeVars
+        [] -> Call a b $ Just $ f2 $ reverse freeVars
         a : b -> Push a $ f1 b
       f2 vars = case vars of
-        [] -> c
+        [] -> cont c
         a : b -> Let a Pop $ f2 b
-    Halt          -> Halt
-    Return  a     -> Return a
-    Push    a b   -> Push a $ cont b
-    If      a b c -> If a (cont b) (cont c)
-    Assert  a b   -> Assert a $ cont b
-    Assume  a b   -> Assume a $ cont b
-    Let     a b c -> Let a b $ cont c
+    Call    a b Nothing -> Call a b Nothing
+    Halt                -> Halt
+    Return  a           -> Return a
+    Push    a b         -> Push a $ cont b
+    If      a b c       -> If a (cont b) (cont c)
+    Assert  a b         -> Assert a $ cont b
+    Assume  a b         -> Assume a $ cont b
+    Let     a b c       -> Let a b $ cont c
 
 {-
 

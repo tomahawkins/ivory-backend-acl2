@@ -1,9 +1,9 @@
 -- | Convert Ivory procedures to CPS.
 module Ivory.Compile.ACL2.CPSConvert
-  ( cpsConvertProc
-  , varSym
+  ( cpsConvert
   ) where
 
+import Data.List (delete)
 import MonadLib
 
 import Ivory.Compile.ACL2.CPS
@@ -11,14 +11,24 @@ import qualified Ivory.Language.Syntax.AST   as I
 import qualified Ivory.Language.Syntax.Names as I
 import Ivory.Language.Syntax.Type
 
+cpsConvert :: [I.Proc] -> [Proc I.ExpOp]
+cpsConvert = snd . snd . runId . runStateT (0, []) . mapM cpsConvertProc
 
-cpsConvertProc :: I.Proc -> Proc I.ExpOp
-cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) cont
+type CPS = StateT (Int, [Proc I.ExpOp]) Id
+
+addProc :: Var -> [Var] -> Cont I.ExpOp -> CPS ()
+addProc f args cont = do
+  (i, procs) <- get
+  set (i, procs ++ [Proc f args cont])
+
+cpsConvertProc :: I.Proc -> CPS ()
+cpsConvertProc p = do
+  cont <- cpsStmts (requires ++ insertEnsures (I.procBody p)) Halt
+  addProc (I.procSym p) (map (var . tValue) $ I.procArgs p) cont
   where
-  (cont, _) = runId $ runStateT 0 $ cpsStmts (requires ++ insertEnsures (I.procBody p)) Halt
   requires = map (I.Assert . cond . I.getRequire) $ I.procRequires p
   ensures :: I.Expr -> I.Stmt
-  --XXX Need to replace replace all the retvals in ensures conditions with the return expression.
+  --XXX Need to replace all the retvals in ensures conditions with the return expression.
   --ensures  = map (I.Assert . cond . I.getEnsure ) $ I.procEnsures  p
   ensures = const $ I.Assert $ I.ExpLit $ I.LitBool True
   cond a = case a of
@@ -37,13 +47,11 @@ cpsConvertProc p = Proc (I.procSym p) (map (varSym . tValue) $ I.procArgs p) con
   insertEnsures :: [I.Stmt] -> [I.Stmt]
   insertEnsures = concatMap insertEnsures'
 
-type CPS = StateT Int Id
-
-gensym :: CPS Var
-gensym = do
-  i <- get
-  set $ i + 1
-  return $ "_cpsConvert" ++ show i
+genVar :: CPS Var
+genVar = do
+  (i, p) <- get
+  set (i + 1, p)
+  return $ "_cps" ++ show i
 
 cpsStmts :: [I.Stmt] -> Cont I.ExpOp -> CPS (Cont I.ExpOp)
 cpsStmts a cont = case a of
@@ -60,28 +68,42 @@ cpsStmts a cont = case a of
       I.Assert         a -> cpsExpr a $ \ a -> return $ Assert a cont
       I.CompilerAssert a -> cpsExpr a $ \ a -> return $ Assert a cont
       I.Assume         a -> cpsExpr a $ \ a -> return $ Assume a cont
-      I.Assign _ a b -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont
-      I.Local  _ a (I.InitExpr _ b) -> cpsExpr b $ \ b -> return $ Let (varSym a) (Var b) cont  
+      I.Assign _ a b -> cpsExpr b $ \ b -> return $ Let (var a) (Var b) cont
+      I.Local  _ a (I.InitExpr _ b) -> cpsExpr b $ \ b -> return $ Let (var a) (Var b) cont  
       I.Call _ Nothing fun args -> f [] $ map tValue args
         where
         f :: [Var] -> [I.Expr] -> CPS (Cont I.ExpOp)
         f args a = case a of
-          [] -> return $ Call (nameSym fun) args cont
+          [] -> return $ Call (var fun) args $ Just cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
       I.Call _ (Just result) fun args -> f [] $ map tValue args
         where
         f :: [Var] -> [I.Expr] -> CPS (Cont I.ExpOp)
         f args a = case a of
-          [] -> return $ Call (nameSym fun) args $ Let (varSym result) (Var "retval") cont
+          [] -> return $ Call (var fun) args $ Just $ Let (var result) (Var "retval") cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
+      I.AllocRef _ a b -> return $ Let (var a) (Var $ var b) cont
+      I.Loop i' init incr body -> do  -- XXX Need to add a check to ensure loop body doesn't have any return or break statements.
+        f <- genVar
+        body <- cpsStmts body Halt
+        let i = var i'
+            args = delete i $ contFreeVars body
+             {-
+             = case incr of
+              IncrTo a -> 
+              DecrTo a -> 
+              -}
+        addProc f (i : args) $ body --XXX Need to add conditional and replace Halt with recursive call and return.
+        cpsExpr init $ \ init -> return $ Call f (init : args) $ Just cont
+
       a -> error $ "Unsupported statement: " ++ show a
 
 cpsExpr :: I.Expr -> (Var -> CPS (Cont I.ExpOp)) -> CPS (Cont I.ExpOp)
 cpsExpr a k = case a of
   I.ExpSym a -> k a
-  I.ExpVar a -> k $ varSym a
+  I.ExpVar a -> k $ var a
   I.ExpLit a -> do
-    v <- gensym
+    v <- genVar
     cont <- k v
     return $ Let v (Literal $ lit a) cont
   I.ExpOp op args -> f args []
@@ -89,7 +111,7 @@ cpsExpr a k = case a of
     f :: [I.Expr] -> [Var] -> CPS (Cont I.ExpOp)
     f argsE argsV = case argsE of
       [] -> do
-        v <- gensym
+        v <- genVar
         cont <- k v
         return $ Let v (Intrinsic op argsV) cont
       a : b -> cpsExpr a $ \ a -> f b (argsV ++ [a])
@@ -105,14 +127,16 @@ lit a = case a of
   I.LitNull      -> LitNull     
   I.LitString  a -> LitString  a
 
-varSym :: I.Var -> Var
-varSym a = case a of
-  I.VarName     a -> a
-  I.VarInternal a -> a
-  I.VarLitName  a -> a
+class GetVar a where var :: a -> Var
 
-nameSym :: I.Name -> Var
-nameSym a = case a of
-  I.NameSym a -> a
-  I.NameVar a -> varSym a
+instance GetVar I.Var where
+  var a = case a of
+    I.VarName     a -> a
+    I.VarInternal a -> a
+    I.VarLitName  a -> a
+
+instance GetVar I.Name where
+  var a = case a of
+    I.NameSym a -> a
+    I.NameVar a -> var a
 

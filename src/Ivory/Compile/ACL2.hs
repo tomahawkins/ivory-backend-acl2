@@ -3,6 +3,7 @@ module Ivory.Compile.ACL2
   ( compileModule
   , verifyModule
   , verifyModules
+  , verifyTermination
   ) where
 
 import Data.List
@@ -22,7 +23,7 @@ import Ivory.Language.Syntax.AST (Module (..))
 compileModule :: Module -> (String, [Expr], [Expr])
 compileModule m = (name, acl21, acl22)
   where
-  cps1  = map cpsConvertProc $ procs m 
+  cps1  = cpsConvert $ procs m 
   cps2  = map explicitStack cps1
   rtl   = rtlConvert        cps2
   acl21 = acl2Convert       rtl 
@@ -34,14 +35,10 @@ compileModule m = (name, acl21, acl22)
 -- | Given a expected result, verifies a module.
 verifyModule :: Bool -> Module -> IO Bool
 verifyModule expected m = do
-  writeFile (name ++ ".lisp") acl2CPS
-
   putStr $ "Verifying termination of: " ++ name ++ " ... "
   hFlush stdout
-  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2CPS
-  let terminates = not $ any (isPrefixOf "ACL2 Error") $ lines result
+  terminates <- verifyTermination m
   putStrLn $ if terminates then "pass" else "FAIL"
-  writeFile (name ++ "_termination.log") result
   hFlush stdout
 
   putStr $ "Verifying assertions of:  " ++ name ++ " ... "
@@ -55,13 +52,24 @@ verifyModule expected m = do
   return $ terminates && pass
 
   where
-  (name, acl2Asm', acl2CPS') = compileModule m
+  (name, acl2Asm', _) = compileModule m
   acl2Asm = unlines $ map show acl2Asm'
-  acl2CPS = unlines $ map show acl2CPS'
 
 -- | Verifies a list of modules.
 verifyModules :: [(Bool, Module)] -> IO Bool
 verifyModules m = do
   pass <- sequence [ verifyModule a b | (a, b) <- m ]
   return $ and pass
+
+-- | Verifies termination of a module.
+verifyTermination :: Module -> IO Bool
+verifyTermination m = do
+  writeFile (name ++ ".lisp") acl2CPS
+  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2CPS
+  let terminates = not $ any (isPrefixOf "ACL2 Error") $ lines result
+  writeFile (name ++ "_termination.log") result
+  return terminates
+  where
+  (name, _, acl2CPS') = compileModule m
+  acl2CPS = unlines $ map show acl2CPS'
 

@@ -79,11 +79,12 @@ addCont name body = do  -- stack and retval are free in body.
 
 cont :: Cont ExpOp -> CN Expr
 cont a = case a of
-  Call f args ret -> do
+  Call f args (Just ret) -> do
     name <- genContName
     ret  <- cont ret
     addCont name ret
     return $ call f $ cons (lit $ show name) stack : map var args
+  Call f args Nothing -> return $ call f $ stack : map var args
   Halt         -> return nil
   Assert a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
   Assume a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }

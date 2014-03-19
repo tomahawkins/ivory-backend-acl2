@@ -29,7 +29,7 @@ proc (Proc name args body) = do
 
 cont :: Cont i -> RTL i ()
 cont a = case a of
-  Call f args k -> do
+  Call f args (Just k) -> do
     procs <- getMeta
     let argVars = head [ args | Proc name args _ <- procs, name == f ] 
     kLabel <- genVar
@@ -43,6 +43,14 @@ cont a = case a of
     label kLabel
     comment "Execute the continuation after the call."
     cont k
+
+  Call f args Nothing -> do
+    procs <- getMeta
+    let argVars = head [ args | Proc name args _ <- procs, name == f ] 
+    comment "Copy the arguments to the functions argument variables."
+    sequence_ [ copy a b | (a, b) <- zip args argVars ]
+    comment "Call the function."
+    jump f
 
   C.Return Nothing  -> return'
   C.Return (Just a) -> copy a "retval" >> return'

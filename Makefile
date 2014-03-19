@@ -5,6 +5,10 @@ all: verify
 verify: Factorial.hs dist/setup-config
 	runhaskell -W Factorial.hs
 
+.PHONY: loop
+loop: Loop.hs dist/setup-config
+	runhaskell -W Loop.hs
+
 test.log: test.lisp
 	acl2 < test.lisp | tee test.log
 
