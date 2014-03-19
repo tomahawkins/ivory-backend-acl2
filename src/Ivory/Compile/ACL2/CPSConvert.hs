@@ -55,13 +55,16 @@ genVar = do
 
 cpsStmts :: [I.Stmt] -> Cont I.ExpOp -> CPS (Cont I.ExpOp)
 cpsStmts a cont = case a of
-  [] -> return $ Halt
+  [] -> return cont
   a : b -> do
     cont <- cpsStmts b cont
     case a of
       I.IfTE a b c -> do
-        b <- cpsStmts b cont
-        c <- cpsStmts c cont
+        f <- genVar
+        let args = contFreeVars cont
+        addProc f args cont
+        b <- cpsStmts b $ Call f args Nothing
+        c <- cpsStmts c $ Call f args Nothing
         cpsExpr a $ \ a -> return $ If a b c
       I.Return a   -> cpsExpr (tValue a) $ \ a -> return $ Return $ Just a  -- This ignores cont (the rest of the function).  Is this ok?
       I.ReturnVoid -> return $ Return Nothing  -- Again, ignores cont.

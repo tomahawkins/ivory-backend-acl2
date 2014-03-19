@@ -69,14 +69,14 @@ instance Show a => Show (Value a) where
 
 -- | Continuations.
 data Cont a
-  = Halt                                -- ^ End the program or loop.
-  | Call    Var [Var] (Maybe (Cont a))  -- ^ Push the continuation onto the stack (if one exists) and call a function with arguments.
-  | Return  (Maybe Var)                 -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
-  | Push    Var (Cont a)                -- ^ Push a value onto the stack.
-  | Let     Var (Value a) (Cont a)      -- ^ Brings a new variable into scope and assigns it a value.
-  | If      Var (Cont a) (Cont a)       -- ^ Conditionally follow one continuation or another.
-  | Assert  Var (Cont a)                -- ^ Assert a value and continue.
-  | Assume  Var (Cont a)                -- ^ State an assumption and continue.
+  = Halt                                    -- ^ End the program or loop.
+  | Call    Var [Var] (Maybe (Cont a))      -- ^ Push the continuation onto the stack (if one exists) and call a function with arguments.
+  | Return  (Maybe Var)                     -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
+  | Push    Var (Cont a)                    -- ^ Push a value onto the stack.
+  | Let     Var (Value a) (Cont a)          -- ^ Brings a new variable into scope and assigns it a value.
+  | If      Var (Cont a) (Cont a)           -- ^ Conditionally follow one continuation or another.
+  | Assert  Var (Cont a)                    -- ^ Assert a value and continue.
+  | Assume  Var (Cont a)                    -- ^ State an assumption and continue.
 
 instance Show a => Show (Cont a) where
   show a = case a of

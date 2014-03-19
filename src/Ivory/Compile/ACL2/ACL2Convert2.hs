@@ -20,7 +20,6 @@ acl2Convert2 procs = [opt1, opt2] ++ mutualRecGroups
   ((), (n, funs, conts)) = runId $ runStateT (0, [], []) $ mapM_ proc procs
   opt1     = call "set-irrelevant-formals-ok"     [lit "t"]
   opt2     = call "set-ignore-ok"                 [lit "t"]
-  start    = defun "start" [] $ call "main" [nil]
   assert   = defun "assert-cond" ["a", "b"] $ var "b"
   callCont = defun "call-cont" ["stack", "retval"] $ if' (consp stack) (f [0 .. n - 1]) retval
     where
@@ -30,7 +29,7 @@ acl2Convert2 procs = [opt1, opt2] ++ mutualRecGroups
       a : b -> if' (equal (car stack) $ lit $ show a') (let' [("stack", cdr stack)] $ fromJust (lookup a' conts)) (f b)
         where
         a' = "_cont_" ++ show a
-  defuns = assert : callCont : funs ++ [start]
+  defuns = assert : callCont : funs
 
   defunNames :: [String]
   defunNames = [ name | Obj (Lit "defun" : Lit name : _) <- defuns ]
