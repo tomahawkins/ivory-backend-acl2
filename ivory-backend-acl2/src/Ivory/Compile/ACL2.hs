@@ -207,57 +207,6 @@ cllStmt a = case a of
       I.DecrTo a -> (False, a)
   a -> error $ "Unsupported Ivory statement: " ++ show a
 
-{-
-cpsStmts :: [I.Stmt] -> Cont I.ExpOp -> CPS (Cont I.ExpOp)
-cpsStmts a cont = case a of
-  [] -> return cont
-  a : b -> do
-    cont <- cpsStmts b cont
-    case a of
-      I.IfTE a b c -> do
-        f <- genVar
-        let args = contFreeVars cont
-        addProc f args cont
-        b <- cpsStmts b $ Call f args Nothing
-        c <- cpsStmts c $ Call f args Nothing
-        cpsExpr a $ \ a -> return $ If a b c
-      I.Return a   -> cpsExpr (tValue a) $ \ a -> return $ Return $ Just a  -- This ignores cont (the rest of the function).  Is this ok?
-      I.ReturnVoid -> return $ Return Nothing  -- Again, ignores cont.
-      I.Assert         a -> cpsExpr a $ \ a -> return $ Assert a cont
-      I.CompilerAssert a -> cpsExpr a $ \ a -> return $ Assert a cont
-      I.Assume         a -> cpsExpr a $ \ a -> return $ Assume a cont
-      I.Assign _ a b -> cpsExpr b $ \ b -> return $ Let (var a) (Var b) cont
-      I.Local  _ a (I.InitExpr _ b) -> cpsExpr b $ \ b -> return $ Let (var a) (Var b) cont  
-      I.Call _ Nothing fun args -> f [] $ map tValue args
-        where
-        f :: [Var] -> [I.Expr] -> CPS (Cont I.ExpOp)
-        f args a = case a of
-          [] -> return $ Call (var fun) args $ Just cont
-          a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
-      I.Call _ (Just result) fun args -> f [] $ map tValue args
-        where
-        f :: [Var] -> [I.Expr] -> CPS (Cont I.ExpOp)
-        f args a = case a of
-          [] -> return $ Call (var fun) args $ Just $ Let (var result) (Var "retval") cont
-          a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
-      I.AllocRef _ a b -> return $ Let (var a) (Var $ var b) cont
-      I.Loop i' init incr' body -> do  -- XXX Need to add a check to ensure loop body doesn't have any return or break statements.
-        body <- cpsStmts body Halt
-        let i = var i'
-            args = delete i $ contFreeVars body
-        cpsExpr init $ \ init -> cpsExpr to $ \ to -> do
-          f <- genVar
-          addProc f (i : args) $ body --XXX Need to add conditional and replace Halt with recursive call and return.
-          return $ Call f (init : args) $ Just cont
-        where
-        (incr, to) = case incr' of
-          I.IncrTo a -> (True, a)
-          I.DecrTo a -> (False, a)
-
-      a -> error $ "Unsupported statement: " ++ show a
-
--}
-
 cllExpr :: I.Expr -> C.Expr ExpOp
 cllExpr a = case a of
   I.ExpSym a -> C.Var a
