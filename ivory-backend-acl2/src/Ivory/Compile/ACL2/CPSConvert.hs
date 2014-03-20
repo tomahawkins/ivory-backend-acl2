@@ -6,7 +6,8 @@ module Ivory.Compile.ACL2.CPSConvert
 import Data.List (delete)
 import MonadLib
 
-import Ivory.Compile.ACL2.CPS
+import Mira.CPS
+
 import qualified Ivory.Language.Syntax.AST   as I
 import qualified Ivory.Language.Syntax.Names as I
 import Ivory.Language.Syntax.Type

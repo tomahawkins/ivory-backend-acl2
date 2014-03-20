@@ -1,5 +1,5 @@
 -- | A DSL for ACL2.
-module Ivory.Compile.ACL2.ACL2
+module Mira.ACL2
   ( Expr (..)
   , mutualRecursion
   , defun
@@ -31,7 +31,16 @@ module Ivory.Compile.ACL2.ACL2
   , integerp
   ) where
 
-import Ivory.Compile.ACL2.SExpr
+data SExpr
+  = SV String
+  | SA [SExpr]
+
+instance Show SExpr where
+  show a = case a of
+    SV a -> a ++ "\n"
+    SA args -> "( " ++ indent (concatMap show args) ++ ")\n"
+      where
+      indent = drop 2 . unlines . map ("  " ++) . lines
 
 data Expr
   = Obj [Expr]

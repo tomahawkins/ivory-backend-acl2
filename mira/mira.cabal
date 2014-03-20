@@ -1,0 +1,37 @@
+name:        mira
+version:     0.0.0
+category:    Compiler, Formal Methods
+synopsis:    Mira: Midend IR Analysis.
+description: Mira is a compiler IR chain with formal analysis (ACL2) and code generation.
+author:      Tom Hawkins  <tomahawkins@gmail.com>
+maintainer:  Tom Hawkins  <tomahawkins@gmail.com>
+
+license: BSD3
+license-file: LICENSE
+
+build-type:    Simple
+cabal-version: >= 1.10
+
+library
+  default-language: Haskell2010
+  build-depends:
+    base     >= 4.0,
+    process  >= 1.1,
+    monadLib >= 3.7.2,
+    ivory
+  exposed-modules:
+    Mira.ACL2
+    Mira.ACL2ConvertCPS
+    Mira.ACL2ConvertRTL
+    Mira.CPS
+    --Mira.CPSConvert
+    Mira.RecTopoSort
+    Mira.RTL
+    Mira.RTLConvert
+  hs-source-dirs: src
+  ghc-options: -W
+
+source-repository head
+  type:     git
+  location: git://github.com/tomahawkins/mira.git
+

@@ -1,5 +1,5 @@
 -- | A CPS IR.
-module Ivory.Compile.ACL2.CPS
+module Mira.CPS
   ( Proc      (..)
   , Value     (..)
   , Literal   (..)

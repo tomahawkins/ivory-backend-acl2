@@ -10,12 +10,13 @@ import Data.List
 import System.IO
 import System.Process
 
-import Ivory.Compile.ACL2.ACL2 (Expr)
-import Ivory.Compile.ACL2.ACL2Convert
-import Ivory.Compile.ACL2.ACL2Convert2
-import Ivory.Compile.ACL2.CPS (explicitStack)
+import Mira.ACL2 (Expr)
+import Mira.ACL2ConvertCPS
+import Mira.ACL2ConvertRTL
+import Mira.CPS (explicitStack)
+import Mira.RTLConvert
+
 import Ivory.Compile.ACL2.CPSConvert
-import Ivory.Compile.ACL2.RTLConvert
 import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Language.Syntax.AST (Module (..))
 
@@ -26,8 +27,8 @@ compileModule m = (name, acl21, acl22)
   cps1  = cpsConvert $ procs m 
   cps2  = map explicitStack cps1
   rtl   = rtlConvert        cps2
-  acl21 = acl2Convert       rtl 
-  acl22 = acl2Convert2      cps2
+  acl21 = acl2ConvertRTL    rtl 
+  acl22 = acl2ConvertCPS    cps2
   name = modName m
   procs :: I.Module -> [I.Proc]
   procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)

@@ -2,11 +2,11 @@
 all: verify
 
 .PHONY: verify
-verify: Factorial.hs dist/setup-config
+verify: Factorial.hs ivory-backend-acl2
 	runhaskell -W Factorial.hs
 
 .PHONY: loop
-loop: Loop.hs dist/setup-config
+loop: Loop.hs ivory-backend-acl2
 	runhaskell -W Loop.hs
 
 test.log: test.lisp
@@ -15,16 +15,25 @@ test.log: test.lisp
 factorial.log: factorial.lisp
 	acl2 < factorial.lisp | tee factorial.log
 
-test.lisp: Tests.hs dist/setup-config
+test.lisp: Tests.hs ivory-backend-acl2
 	runhaskell -W Tests.hs
 
-dist/setup-config: src/Ivory/Compile/ACL2.hs src/Ivory/Compile/ACL2/*.hs
-	cabal build
-	cabal install
+.PHONY: ivory-backend-acl2
+ivory-backend-acl2: ivory-backend-acl2/dist/setup-config
+ivory-backend-acl2/dist/setup-config: mira ivory-backend-acl2/src/Ivory/Compile/ACL2.hs ivory-backend-acl2/src/Ivory/Compile/ACL2/*.hs
+	cd ivory-backend-acl2 && cabal build
+	cd ivory-backend-acl2 && cabal install
+
+.PHONY: mira
+mira: mira/dist/setup-config
+mira/dist/setup-config: mira/src/Mira/*.hs
+	cd mira && cabal build
+	cd mira && cabal install
 
 .PHONY: clean
 clean:
-	cabal clean
+	cd mira               && cabal clean
+	cd ivory-backend-acl2 && cabal clean
 	-rm *.cps1
 	-rm *.cps2
 	-rm *.rtl

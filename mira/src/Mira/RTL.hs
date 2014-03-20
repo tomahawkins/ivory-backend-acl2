@@ -1,5 +1,5 @@
 -- | A generic assembly language.
-module Ivory.Compile.ACL2.RTL
+module Mira.RTL
   ( Var
   , Label
   , Program     (..)
@@ -32,7 +32,7 @@ import Data.List
 import MonadLib hiding (Label, jump)
 import Text.Printf
 
-import Ivory.Compile.ACL2.CPS (Literal)
+import Mira.CPS (Literal)
 
 type Var   = String
 type Label = String

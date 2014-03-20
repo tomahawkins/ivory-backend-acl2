@@ -1,21 +1,22 @@
 -- | Compile CPS directly to ACL2.
-module Ivory.Compile.ACL2.ACL2Convert2
-  ( acl2Convert2
+module Mira.ACL2ConvertCPS
+  ( acl2ConvertCPS
   ) where
 
 import Data.Maybe (fromJust)
 import MonadLib
 
-import Ivory.Compile.ACL2.ACL2
-import Ivory.Compile.ACL2.ACL2Convert (showLit)
-import Ivory.Compile.ACL2.CPS
-import Ivory.Compile.ACL2.RecTopoSort
 import Ivory.Language.Syntax.AST (ExpOp (..))
+
+import Mira.ACL2
+import Mira.ACL2ConvertRTL (showLit)
+import Mira.CPS
+import Mira.RecTopoSort
 
 type CN = StateT (Int, [Expr], [(String, Expr)]) Id
 
-acl2Convert2 :: [Proc ExpOp] -> [Expr]
-acl2Convert2 procs = [opt1, opt2] ++ mutualRecGroups
+acl2ConvertCPS :: [Proc ExpOp] -> [Expr]
+acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
   where
   ((), (n, funs, conts)) = runId $ runStateT (0, [], []) $ mapM_ proc procs
   opt1     = call "set-irrelevant-formals-ok"     [lit "t"]

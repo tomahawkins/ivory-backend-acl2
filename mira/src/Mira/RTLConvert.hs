@@ -1,13 +1,13 @@
 -- | Compile CPS to RTL.
-module Ivory.Compile.ACL2.RTLConvert
+module Mira.RTLConvert
   ( rtlConvert
   ) where
 
 import Data.List
 
-import Ivory.Compile.ACL2.CPS as C
-import Ivory.Compile.ACL2.RTL hiding (RTL, Var)
-import qualified Ivory.Compile.ACL2.RTL as R
+import Mira.CPS as C
+import Mira.RTL hiding (RTL, Var)
+import qualified Mira.RTL as R
 
 type RTL i = R.RTL [Proc i] i
 

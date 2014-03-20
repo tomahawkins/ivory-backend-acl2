@@ -1,18 +1,19 @@
 -- | Compile RTL to ACL2.
-module Ivory.Compile.ACL2.ACL2Convert
-  ( acl2Convert
+module Mira.ACL2ConvertRTL
+  ( acl2ConvertRTL
   , showLit
   ) where
 
 import Data.Maybe (fromJust)
 
-import Ivory.Compile.ACL2.ACL2
-import Ivory.Compile.ACL2.RTL
-import Ivory.Compile.ACL2.CPS (Literal (..))
 import Ivory.Language.Syntax.AST (ExpOp (..))
 
-acl2Convert :: Program ExpOp -> [Expr]
-acl2Convert program@(Program instrs) = utils ++ instructionSemantics ++
+import Mira.ACL2
+import Mira.RTL
+import Mira.CPS (Literal (..))
+
+acl2ConvertRTL :: Program ExpOp -> [Expr]
+acl2ConvertRTL program@(Program instrs) = utils ++ instructionSemantics ++
   [ step
   , stepN
   , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction labs vars) instrs, nil, nil, labs "start"]
