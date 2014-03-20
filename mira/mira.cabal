@@ -22,8 +22,9 @@ library
     Mira.ACL2
     Mira.ACL2ConvertCPS
     Mira.ACL2ConvertRTL
+    Mira.CLL
     Mira.CPS
-    --Mira.CPSConvert
+    Mira.CPSConvert
     Mira.RecTopoSort
     Mira.RTL
     Mira.RTLConvert

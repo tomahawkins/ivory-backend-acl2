@@ -20,7 +20,6 @@ library
     mira
   exposed-modules:
     Ivory.Compile.ACL2
-    Ivory.Compile.ACL2.CPSConvert
   hs-source-dirs: src
   ghc-options: -W
 
