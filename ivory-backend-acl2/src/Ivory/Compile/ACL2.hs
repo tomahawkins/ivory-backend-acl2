@@ -195,9 +195,14 @@ cllStmt a = case a of
   I.Assert         a -> C.Assert $ cllExpr a
   I.CompilerAssert a -> C.Assert $ cllExpr a
   I.Assume         a -> C.Assume $ cllExpr a
-  I.Assign   _ a b              -> C.Let (var a) $ cllExpr b
-  I.AllocRef _ a b              -> C.Let (var a) $ C.Var $ var b
-  I.Local  _ a (I.InitExpr _ b) -> C.Let (var a) $ cllExpr b
+  I.Local    _ a (I.InitExpr _ b) -> C.Let (var a) $ cllExpr b
+
+  -- What are the right semantics for the following?
+  I.Assign   _ a b -> C.Let (var a) $ cllExpr b
+  I.AllocRef _ a b -> C.Let (var a) $ C.Var $ var b
+  I.Deref    _ a b -> C.Let (var a) $ cllExpr b
+  I.Store    _ (I.ExpVar a) b -> C.Let (var a) $ cllExpr b
+
   I.Call   _ Nothing  fun args  -> C.Call Nothing        (var fun) $ map (cllExpr . tValue) args
   I.Call   _ (Just r) fun args  -> C.Call (Just $ var r) (var fun) $ map (cllExpr . tValue) args
   I.Loop i init incr' body      -> C.Loop (var i) (cllExpr init) incr (cllExpr to) (cllStmts body)
