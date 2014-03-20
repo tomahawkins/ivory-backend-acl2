@@ -22,13 +22,13 @@ test.lisp: Tests.hs ivory-backend-acl2
 ivory-backend-acl2: ivory-backend-acl2/dist/setup-config
 ivory-backend-acl2/dist/setup-config: mira ivory-backend-acl2/src/Ivory/Compile/ACL2.hs ivory-backend-acl2/src/Ivory/Compile/ACL2/*.hs
 	cd ivory-backend-acl2 && cabal build
-	cd ivory-backend-acl2 && cabal install
+	cd ivory-backend-acl2 && cabal install --force-reinstalls
 
 .PHONY: mira
 mira: mira/dist/setup-config
 mira/dist/setup-config: mira/src/Mira/*.hs
 	cd mira && cabal build
-	cd mira && cabal install
+	cd mira && cabal install --force-reinstalls
 
 .PHONY: clean
 clean:

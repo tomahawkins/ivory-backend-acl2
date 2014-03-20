@@ -6,19 +6,17 @@ module Mira.ACL2ConvertCPS
 import Data.Maybe (fromJust)
 import MonadLib
 
-import Ivory.Language.Syntax.AST (ExpOp (..))
-
 import Mira.ACL2
 import Mira.ACL2ConvertRTL (showLit)
 import Mira.CPS
 import Mira.RecTopoSort
 
-type CN = StateT (Int, [Expr], [(String, Expr)]) Id
+type CN i = StateT (Int, [Expr], [(String, Expr)], i -> [Expr] -> Expr) Id
 
-acl2ConvertCPS :: [Proc ExpOp] -> [Expr]
-acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
+acl2ConvertCPS :: (i -> [Expr] -> Expr) -> [Proc i] -> [Expr]
+acl2ConvertCPS intrinsics procs = [opt1, opt2] ++ mutualRecGroups
   where
-  ((), (n, funs, conts)) = runId $ runStateT (0, [], []) $ mapM_ proc procs
+  ((), (n, funs, conts, _)) = runId $ runStateT (0, [], [], intrinsics) $ mapM_ proc procs
   opt1     = call "set-irrelevant-formals-ok"     [lit "t"]
   opt2     = call "set-ignore-ok"                 [lit "t"]
   assert   = defun "assert-cond" ["a", "b"] $ var "b"
@@ -56,28 +54,33 @@ acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
 
   mutualRecGroups = map mutualRec $ recTopoSort callees defuns
 
-proc :: Proc ExpOp -> CN ()
+proc :: Proc i -> CN i ()
 proc (Proc name args body) = do
   body <- cont body
   addFun name ("stack" : args) $ if' (foldl (and') t $ map (integerp . var) args) body nil
 
-genContName :: CN String
+genContName :: CN i String
 genContName = do
-  (i, f, c) <- get
-  set (i + 1, f, c)
+  (i, f, c, intr) <- get
+  set (i + 1, f, c, intr)
   return $ "_cont_" ++ show i
 
-addFun :: String -> [String] -> Expr -> CN ()
+addFun :: String -> [String] -> Expr -> CN i ()
 addFun name args body = do
-  (i, f, c) <- get
-  set (i, f ++ [defun name args body], c)
+  (i, f, c, intr) <- get
+  set (i, f ++ [defun name args body], c, intr)
 
-addCont :: String -> Expr -> CN ()
+addCont :: String -> Expr -> CN i ()
 addCont name body = do  -- stack and retval are free in body.
-  (i, f, c) <- get
-  set (i, f, c ++ [(name, body)])
+  (i, f, c, intr) <- get
+  set (i, f, c ++ [(name, body)], intr)
 
-cont :: Cont ExpOp -> CN Expr
+intrinsic :: i -> [Expr] -> CN i Expr
+intrinsic op args = do
+  (_, _, _, intr) <- get
+  return $ intr op args
+
+cont :: Cont i -> CN i Expr
 cont a = case a of
   Call f args (Just ret) -> do
     name <- genContName
@@ -96,27 +99,7 @@ cont a = case a of
       Var     b -> return $ let' [(a, var b)] c
       Literal b -> return $ let' [(a, lit $ showLit b)] c
       Pop       -> return $ let' [(a, car stack), ("stack", cdr stack)] c
-      Intrinsic i args -> return $ let' [(a, b)] c
-        where
-        b = case i of
-          ExpEq   _        -> if' (equal (arg 0) (arg 1)) 1 0
-          ExpNeq  _        -> if' (not' (equal (arg 0) (arg 1))) 1 0
-          ExpCond          -> if' (zip' (arg 0)) (arg 2) (arg 1)
-          ExpGt   False _  -> if' (call ">"  [arg 0, arg 1]) 1 0
-          ExpGt   True  _  -> if' (call ">=" [arg 0, arg 1]) 1 0
-          ExpLt   False _  -> if' (call "<"  [arg 0, arg 1]) 1 0
-          ExpLt   True  _  -> if' (call "<=" [arg 0, arg 1]) 1 0
-          ExpNot           -> if' (zip' (arg 0)) 1 0
-          ExpAnd           -> if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1
-          ExpOr            -> if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1
-          ExpMul           -> arg 0 * arg 1
-          ExpAdd           -> arg 0 + arg 1
-          ExpSub           -> arg 0 - arg 1
-          ExpNegate        -> 0 - arg 1
-          ExpAbs           -> if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0)
-          ExpSignum        -> if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0
-          a -> error $ "Unsupported intrinsic: " ++ show a
-        arg n = var $ args !! n
+      Intrinsic i args -> intrinsic i $ map var args
   Return (Just a) -> return $ call "call-cont" [stack, var a]
   Return Nothing  -> return $ call "call-cont" [stack, nil]
 
