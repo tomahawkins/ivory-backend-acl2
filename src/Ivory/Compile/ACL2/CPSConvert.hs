@@ -86,18 +86,18 @@ cpsStmts a cont = case a of
           [] -> return $ Call (var fun) args $ Just $ Let (var result) (Var "retval") cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
       I.AllocRef _ a b -> return $ Let (var a) (Var $ var b) cont
-      I.Loop i' init incr body -> do  -- XXX Need to add a check to ensure loop body doesn't have any return or break statements.
-        f <- genVar
+      I.Loop i' init incr' body -> do  -- XXX Need to add a check to ensure loop body doesn't have any return or break statements.
         body <- cpsStmts body Halt
         let i = var i'
             args = delete i $ contFreeVars body
-             {-
-             = case incr of
-              IncrTo a -> 
-              DecrTo a -> 
-              -}
-        addProc f (i : args) $ body --XXX Need to add conditional and replace Halt with recursive call and return.
-        cpsExpr init $ \ init -> return $ Call f (init : args) $ Just cont
+        cpsExpr init $ \ init -> cpsExpr to $ \ to -> do
+          f <- genVar
+          addProc f (i : args) $ body --XXX Need to add conditional and replace Halt with recursive call and return.
+          return $ Call f (init : args) $ Just cont
+        where
+        (incr, to) = case incr' of
+          I.IncrTo a -> (True, a)
+          I.DecrTo a -> (False, a)
 
       a -> error $ "Unsupported statement: " ++ show a
 
