@@ -16,9 +16,8 @@ library
   default-language: Haskell2010
   build-depends:
     base     >= 4.0,
-    process  >= 1.1,
-    monadLib >= 3.7.2,
-    ivory
+    --process  >= 1.1,
+    monadLib >= 3.7.2
   exposed-modules:
     Mira.ACL2
     Mira.ACL2ConvertCPS

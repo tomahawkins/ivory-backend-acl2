@@ -6,17 +6,15 @@ module Mira.ACL2ConvertRTL
 
 import Data.Maybe (fromJust)
 
-import Ivory.Language.Syntax.AST (ExpOp (..))
-
 import Mira.ACL2
 import Mira.RTL
 import Mira.CPS (Literal (..))
 
-acl2ConvertRTL :: Program ExpOp -> [Expr]
-acl2ConvertRTL program@(Program instrs) = utils ++ instructionSemantics ++
+acl2ConvertRTL :: (i -> Expr) -> (Expr -> (Int -> Expr) -> Expr) -> Program i -> [Expr]
+acl2ConvertRTL intrinsicCode intrinsicImp program@(Program instrs) = utils ++ instructionSemantics intrinsicImp ++
   [ step
   , stepN
-  , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction labs vars) instrs, nil, nil, labs "start"]
+  , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction intrinsicCode labs vars) instrs, nil, nil, labs "start"]
   ] ++
   [ defun  ("fail-at-" ++ show a ++ "-fun") ["n"] $ not' $ equal (fromIntegral a) $ getPC $ stepN' n | a <- fails ] ++
   [ defthm ("fail-at-" ++ show a ++ "-thm") $ call ("fail-at-" ++ show a ++ "-fun") [n]              | a <- fails ]
@@ -90,8 +88,8 @@ popDataStack  s   = call "pop-data-stack"  [s]
 incrPC        s   = call "incr-pc"         [s]
 
 
-instructionSemantics :: [Expr]
-instructionSemantics =
+instructionSemantics :: (Expr -> (Int -> Expr) -> Expr) -> [Expr]
+instructionSemantics intrinsicImp =
   [ defun "rtl-comment"   ["s"]                $ incrPC s
   , defun "rtl-label"     ["s"]                $ incrPC s
   , defun "rtl-return"    ["s"]                $ let' [("a", popCallStack s)] $ setPC (car a) (cdr a)
@@ -104,59 +102,7 @@ instructionSemantics =
   , defun "rtl-pop"       ["s", "a"]           $ incrPC $ let' [("b", popDataStack s), ("s", car b), ("b", cdr b)] $ setDataMem s $ replaceNth a (getDataMem s) b 
   , defun "rtl-copy"      ["s", "a", "b"]      $ incrPC $ setDataMem s $ replaceNth b (getDataMem s) $ nth a $ getDataMem s
   , defun "rtl-const"     ["s", "a", "b"]      $ incrPC $ setDataMem s $ replaceNth b (getDataMem s) a
-  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ let' [("mem", getDataMem s)] $ replaceNth c mem $ case' a
-    [ (codeExpEq            , if' (equal (arg 0) (arg 1)) 1 0)
-    , (codeExpNeq           , if' (not' (equal (arg 0) (arg 1))) 1 0)
-    , (codeExpCond          , if' (zip' (arg 0)) (arg 2) (arg 1))
-    , (codeExpGt            , if' (call ">"  [arg 0, arg 1]) 1 0)
-    , (codeExpGe            , if' (call ">=" [arg 0, arg 1]) 1 0)
-    , (codeExpLt            , if' (call "<"  [arg 0, arg 1]) 1 0)
-    , (codeExpLe            , if' (call "<=" [arg 0, arg 1]) 1 0)
-    , (codeExpNot           , if' (zip' (arg 0)) 1 0)
-    , (codeExpAnd           , if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1)
-    , (codeExpOr            , if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1)
-    , (codeExpMul           , arg 0 * arg 1)
-    , (codeExpAdd           , arg 0 + arg 1)
-    , (codeExpSub           , arg 0 - arg 1)
-    , (codeExpNegate        , 0 - arg 1)
-    , (codeExpAbs           , if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0))
-    , (codeExpSignum        , if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0)
-    {-
-    , (codeExpDiv           , )
-    , (codeExpMod           , )
-    , (codeExpRecip         , )
-    , (codeExpFExp          , )
-    , (codeExpFSqrt         , )
-    , (codeExpFLog          , )
-    , (codeExpFPow          , )
-    , (codeExpFLogBase      , )
-    , (codeExpFSin          , )
-    , (codeExpFTan          , )
-    , (codeExpFCos          , )
-    , (codeExpFAsin         , )
-    , (codeExpFAtan         , )
-    , (codeExpFAcos         , )
-    , (codeExpFSinh         , )
-    , (codeExpFTanh         , )
-    , (codeExpFCosh         , )
-    , (codeExpFAsinh        , )
-    , (codeExpFAtanh        , )
-    , (codeExpFAcosh        , )
-    , (codeExpIsNan         , )
-    , (codeExpIsInf         , )
-    , (codeExpRoundF        , )
-    , (codeExpCeilF         , )
-    , (codeExpFloorF        , )
-    , (codeExpToFloat       , )
-    , (codeExpFromFloat     , )
-    , (codeExpBitAnd        , )
-    , (codeExpBitOr         , )
-    , (codeExpBitXor        , )
-    , (codeExpBitComplement , )
-    , (codeExpBitShiftL     , )
-    , (codeExpBitShiftR     , )
-    -}
-    ] 0
+  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ let' [("mem", getDataMem s)] $ replaceNth c mem $ intrinsicImp a arg
   ]
   where
   s = var "s"
@@ -164,7 +110,7 @@ instructionSemantics =
   b = var "b"
   c = var "c"
   mem = var "mem"
-  arg i = nth (nth i b) mem
+  arg i = nth (nth (fromIntegral i) b) mem
 
 -- | Step the machine by one instruction.
 step :: Expr
@@ -211,8 +157,8 @@ codeConst     = 11
 codeIntrinsic = 12
 
 -- | Assemble an intruction into ACL2.
-assembleInstruction :: (Label -> Expr) -> (Var -> Int) -> Instruction ExpOp -> Expr
-assembleInstruction labelAddr varAddr' a = case a of
+assembleInstruction :: (i -> Expr) -> (Label -> Expr) -> (Var -> Int) -> Instruction i -> Expr
+assembleInstruction intrinsicCode labelAddr varAddr' a = case a of
   Comment   _     -> obj [codeComment                              ]
   Label     _     -> obj [codeLabel                                ]
   Return          -> obj [codeReturn                               ]
@@ -225,7 +171,7 @@ assembleInstruction labelAddr varAddr' a = case a of
   Pop       a     -> obj [codePop,       varAddr a                 ]
   PushCont  a     -> obj [codePushCont,  labelAddr a               ]
   Const     a b   -> obj [codeConst,     lit $ showLit a, varAddr b   ]
-  Intrinsic a b c -> obj [codeIntrinsic, encodeOp a,   obj (map varAddr b), varAddr c]
+  Intrinsic a b c -> obj [codeIntrinsic, intrinsicCode a,   obj (map varAddr b), varAddr c]
   where
   varAddr = fromIntegral . varAddr'
 
@@ -235,111 +181,4 @@ showLit a = case a of
   LitBool    True  -> "1"
   LitBool    False -> "0"
   a -> error $ "unsupported literal: " ++ show a
-
-encodeOp :: ExpOp -> Expr
-encodeOp a = case a of
-  ExpEq  _         -> codeExpEq           
-  ExpNeq _         -> codeExpNeq          
-  ExpCond          -> codeExpCond         
-  ExpGt False _    -> codeExpGt           
-  ExpGt True  _    -> codeExpGe           
-  ExpLt False _    -> codeExpLt           
-  ExpLt True  _    -> codeExpLe           
-  ExpNot           -> codeExpNot          
-  ExpAnd           -> codeExpAnd          
-  ExpOr            -> codeExpOr           
-  ExpMul           -> codeExpMul          
-  ExpAdd           -> codeExpAdd          
-  ExpSub           -> codeExpSub          
-  ExpNegate        -> codeExpNegate       
-  ExpAbs           -> codeExpAbs          
-  ExpSignum        -> codeExpSignum       
-  a -> error $ "ExpOp not supported: " ++ show a
-  {-
-  ExpDiv           -> codeExpDiv          
-  ExpMod           -> codeExpMod          
-  ExpRecip         -> codeExpRecip        
-  ExpFExp          -> codeExpFExp         
-  ExpFSqrt         -> codeExpFSqrt        
-  ExpFLog          -> codeExpFLog         
-  ExpFPow          -> codeExpFPow         
-  ExpFLogBase      -> codeExpFLogBase     
-  ExpFSin          -> codeExpFSin         
-  ExpFTan          -> codeExpFTan         
-  ExpFCos          -> codeExpFCos         
-  ExpFAsin         -> codeExpFAsin        
-  ExpFAtan         -> codeExpFAtan        
-  ExpFAcos         -> codeExpFAcos        
-  ExpFSinh         -> codeExpFSinh        
-  ExpFTanh         -> codeExpFTanh        
-  ExpFCosh         -> codeExpFCosh        
-  ExpFAsinh        -> codeExpFAsinh       
-  ExpFAtanh        -> codeExpFAtanh       
-  ExpFAcosh        -> codeExpFAcosh       
-  ExpIsNan _       -> codeExpIsNan        
-  ExpIsInf _       -> codeExpIsInf        
-  ExpRoundF        -> codeExpRoundF       
-  ExpCeilF         -> codeExpCeilF        
-  ExpFloorF        -> codeExpFloorF       
-  ExpToFloat   _   -> codeExpToFloat      
-  ExpFromFloat _   -> codeExpFromFloat    
-  ExpBitAnd        -> codeExpBitAnd       
-  ExpBitOr         -> codeExpBitOr        
-  ExpBitXor        -> codeExpBitXor       
-  ExpBitComplement -> codeExpBitComplement
-  ExpBitShiftL     -> codeExpBitShiftL    
-  ExpBitShiftR     -> codeExpBitShiftR    
-  -}
-
-codeExpEq            = 0
-codeExpNeq           = 1
-codeExpCond          = 2
-codeExpGt            = 3
-codeExpGe            = 4
-codeExpLt            = 5
-codeExpLe            = 6
-codeExpNot           = 7
-codeExpAnd           = 8
-codeExpOr            = 9
-codeExpMul           = 10
-codeExpAdd           = 11
-codeExpSub           = 12
-codeExpNegate        = 13
-codeExpAbs           = 14
-codeExpSignum        = 15
-{-
-codeExpDiv           = 16
-codeExpMod           = 17
-codeExpRecip         = 18
-codeExpFExp          = 19
-codeExpFSqrt         = 20
-codeExpFLog          = 21
-codeExpFPow          = 22
-codeExpFLogBase      = 23
-codeExpFSin          = 24
-codeExpFTan          = 25
-codeExpFCos          = 26
-codeExpFAsin         = 27
-codeExpFAtan         = 28
-codeExpFAcos         = 29
-codeExpFSinh         = 30
-codeExpFTanh         = 31
-codeExpFCosh         = 32
-codeExpFAsinh        = 33
-codeExpFAtanh        = 34
-codeExpFAcosh        = 35
-codeExpIsNan         = 36
-codeExpIsInf         = 37
-codeExpRoundF        = 38
-codeExpCeilF         = 39
-codeExpFloorF        = 40
-codeExpToFloat       = 41
-codeExpFromFloat     = 42
-codeExpBitAnd        = 43
-codeExpBitOr         = 44
-codeExpBitXor        = 45
-codeExpBitComplement = 46
-codeExpBitShiftL     = 47
-codeExpBitShiftR     = 48
--}
 
