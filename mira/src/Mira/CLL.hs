@@ -32,11 +32,11 @@ instance Show i => Show (Stmt i) where
     Call    (Just c) a b -> printf "%s = %s(%s)\n" c a (intercalate ", " $ map show b)
     Return  (Just a)     -> printf "return %s\n" $ show a
     Return  Nothing      -> "return\n"
-    If      a b c        -> printf "if (%s)\n" (show a) ++ indent (unlines $ map show b) ++ "\nelse\n" ++ indent (unlines $ map show c)
+    If      a b c        -> printf "if (%s)\n" (show a) ++ indent (concatMap show b) ++ "\nelse\n" ++ indent (concatMap show c)
     Assert  a            -> printf "assert %s\n" $ show a
     Assume  a            -> printf "assume %s\n" $ show a
     Let     a b          -> printf "%s = %s\n" a $ show b
-    Loop    a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ unlines $ map show e)
+    Loop    a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
