@@ -4,7 +4,6 @@ module Mira.CPS
   , Value        (..)
   , Literal      (..)
   , Cont         (..)
-  , Intrinsics   (..)
   , Var
   , variables
   , contFreeVars
@@ -104,12 +103,6 @@ instance Show a => Show (Cont a) where
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
-
-class Intrinsics i where
-  add :: i
-  sub :: i
-  le  :: i
-  ge  :: i
 
 -- | All the variables in a CPS program.
 variables :: [Proc i] -> [Var]

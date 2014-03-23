@@ -3,13 +3,12 @@ module Mira.CPSConvert
   ( cpsConvert
   ) where
 
-import Debug.Trace
-
 import Data.List (delete)
 import MonadLib
 
 import qualified Mira.CLL as C
 import Mira.CPS
+import Mira.Intrinsics
 
 cpsConvert :: Intrinsics i => [C.Proc i] -> [Proc i]
 cpsConvert = snd . snd . runId . runStateT (0, []) . mapM cpsConvertProc
@@ -71,12 +70,12 @@ cpsStmts a cont = case a of
         fun  <- genVar
         test <- genVar
         one  <- genVar
-        addProc fun args $ Let test (Intrinsic (if incr then le else ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
-        trace ("loop body function: " ++ fun) $ return $ Call fun (init : to : args') $ Just cont
+        addProc fun args $ Let test (Intrinsic (if incr then intrinsicLE else intrinsicGE) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
+        return $ Call fun (init : to : args') $ Just cont
         where
         -- Replace Halt with recursive call.
         f fun i args one a = case a of
-          Halt -> Just $ Let one 0 $ Let i (Intrinsic (if incr then add else sub) [i, one]) $ Call fun args Nothing
+          Halt -> Just $ Let one 0 $ Let i (Intrinsic (if incr then intrinsicAdd else intrinsicSub) [i, one]) $ Call fun args Nothing
           _    -> Nothing
 
 cpsExpr :: C.Expr i -> (Var -> CPS i (Cont i)) -> CPS i (Cont i)

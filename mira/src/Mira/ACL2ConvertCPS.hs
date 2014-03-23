@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 -- | Compile CPS directly to ACL2.
 module Mira.ACL2ConvertCPS
   ( acl2ConvertCPS
@@ -9,14 +10,15 @@ import MonadLib
 import Mira.ACL2
 import Mira.ACL2ConvertRTL (showLit)
 import Mira.CPS
+import Mira.Intrinsics
 import Mira.RecTopoSort
 
-type CN i = StateT (Int, [Expr], [(String, Expr)], i -> [Expr] -> Expr) Id
+type CN i = StateT (Int, [Expr], [(String, Expr)]) Id
 
-acl2ConvertCPS :: (i -> [Expr] -> Expr) -> [Proc i] -> [Expr]
-acl2ConvertCPS intrinsics procs = [opt1, opt2] ++ mutualRecGroups
+acl2ConvertCPS :: Intrinsics i => [Proc i] -> [Expr]
+acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
   where
-  ((), (n, funs, conts, _)) = runId $ runStateT (0, [], [], intrinsics) $ mapM_ proc procs
+  ((), (n, funs, conts)) = runId $ runStateT (0, [], []) $ mapM_ proc procs
   opt1     = call "set-irrelevant-formals-ok"     [lit "t"]
   opt2     = call "set-ignore-ok"                 [lit "t"]
   assert   = defun "assert-cond" ["a", "b"] $ var "b"
@@ -54,33 +56,28 @@ acl2ConvertCPS intrinsics procs = [opt1, opt2] ++ mutualRecGroups
 
   mutualRecGroups = map mutualRec $ recTopoSort callees defuns
 
-proc :: Proc i -> CN i ()
+proc :: Intrinsics i => Proc i -> CN i ()
 proc (Proc name args body) = do
   body <- cont body
   addFun name ("stack" : args) $ if' (foldl (and') t $ map (integerp . var) args) body nil
 
 genContName :: CN i String
 genContName = do
-  (i, f, c, intr) <- get
-  set (i + 1, f, c, intr)
+  (i, f, c) <- get
+  set (i + 1, f, c)
   return $ "_cont_" ++ show i
 
 addFun :: String -> [String] -> Expr -> CN i ()
 addFun name args body = do
-  (i, f, c, intr) <- get
-  set (i, f ++ [defun name args body], c, intr)
+  (i, f, c) <- get
+  set (i, f ++ [defun name args body], c)
 
 addCont :: String -> Expr -> CN i ()
 addCont name body = do  -- stack and retval are free in body.
-  (i, f, c, intr) <- get
-  set (i, f, c ++ [(name, body)], intr)
+  (i, f, c) <- get
+  set (i, f, c ++ [(name, body)])
 
-intrinsic :: i -> [Expr] -> CN i Expr
-intrinsic op args = do
-  (_, _, _, intr) <- get
-  return $ intr op args
-
-cont :: Cont i -> CN i Expr
+cont :: Intrinsics i => Cont i -> CN i Expr
 cont a = case a of
   Call f args (Just ret) -> do
     name <- genContName
@@ -99,7 +96,7 @@ cont a = case a of
       Var     b -> return $ let' [(a, var b)] c
       Literal b -> return $ let' [(a, lit $ showLit b)] c
       Pop       -> return $ let' [(a, car stack), ("stack", cdr stack)] c
-      Intrinsic i args -> intrinsic i $ map var args
+      Intrinsic i args -> return $ intrinsicImpl i (map var args !!)
   Return (Just a) -> return $ call "call-cont" [stack, var a]
   Return Nothing  -> return $ call "call-cont" [stack, nil]
 

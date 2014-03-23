@@ -14,7 +14,7 @@ import Mira
 import Mira.ACL2 hiding (var, lit)
 import qualified Mira.CLL as C
 import Mira.CLL (Var, Literal (..))
-import Mira.CPS (Intrinsics (..))
+import Mira.Intrinsics
 
 import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Language.Syntax.AST (Module (..), ExpOp (..))
@@ -24,7 +24,7 @@ import qualified Ivory.Language.Syntax.Names as I
 -- | Compiles a module to two different ACL2 representations: assembly and CPS.
 compileModule :: Module -> IO String
 compileModule m = do
-  compile name intrinsics intrinsicCode intrinsicImp $ map cllConvert $ procs m
+  compile name intrinsicImp $ map cllConvert $ procs m
   return name
   where
   name = modName m
@@ -32,55 +32,50 @@ compileModule m = do
   procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)
 
 instance Intrinsics ExpOp where
-  add = ExpAdd
-  sub = ExpSub
-  ge  = ExpGt True TyVoid
-  le  = ExpLt True TyVoid
+  intrinsicAdd = ExpAdd
+  intrinsicSub = ExpSub
+  intrinsicGE  = ExpGt True TyVoid
+  intrinsicLE  = ExpLt True TyVoid
 
--- Intrinsic implementation for ACL2 (CPS form).
-intrinsics :: ExpOp -> [Expr] -> Expr
-intrinsics op args = case op of
-  ExpEq   _        -> if' (equal (arg 0) (arg 1)) 1 0
-  ExpNeq  _        -> if' (not' (equal (arg 0) (arg 1))) 1 0
-  ExpCond          -> if' (zip' (arg 0)) (arg 2) (arg 1)
-  ExpGt   False _  -> if' (call ">"  [arg 0, arg 1]) 1 0
-  ExpGt   True  _  -> if' (call ">=" [arg 0, arg 1]) 1 0
-  ExpLt   False _  -> if' (call "<"  [arg 0, arg 1]) 1 0
-  ExpLt   True  _  -> if' (call "<=" [arg 0, arg 1]) 1 0
-  ExpNot           -> if' (zip' (arg 0)) 1 0
-  ExpAnd           -> if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1
-  ExpOr            -> if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1
-  ExpMul           -> arg 0 * arg 1
-  ExpMod           -> mod' (arg 0) (arg 1) 
-  ExpAdd           -> arg 0 + arg 1
-  ExpSub           -> arg 0 - arg 1
-  ExpNegate        -> 0 - arg 1
-  ExpAbs           -> if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0)
-  ExpSignum        -> if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0
-  a -> error $ "Unsupported intrinsic: " ++ show a
-  where
-  arg n = args !! n
+  intrinsicImpl op arg = case op of
+    ExpEq   _        -> if' (equal (arg 0) (arg 1)) 1 0
+    ExpNeq  _        -> if' (not' (equal (arg 0) (arg 1))) 1 0
+    ExpCond          -> if' (zip' (arg 0)) (arg 2) (arg 1)
+    ExpGt   False _  -> if' (call ">"  [arg 0, arg 1]) 1 0
+    ExpGt   True  _  -> if' (call ">=" [arg 0, arg 1]) 1 0
+    ExpLt   False _  -> if' (call "<"  [arg 0, arg 1]) 1 0
+    ExpLt   True  _  -> if' (call "<=" [arg 0, arg 1]) 1 0
+    ExpNot           -> if' (zip' (arg 0)) 1 0
+    ExpAnd           -> if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1
+    ExpOr            -> if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1
+    ExpMul           -> arg 0 * arg 1
+    ExpMod           -> mod' (arg 0) (arg 1) 
+    ExpAdd           -> arg 0 + arg 1
+    ExpSub           -> arg 0 - arg 1
+    ExpNegate        -> 0 - arg 1
+    ExpAbs           -> if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0)
+    ExpSignum        -> if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0
+    a -> error $ "Unsupported intrinsic: " ++ show a
 
-intrinsicCode :: ExpOp -> Expr
-intrinsicCode a = case a of
-  ExpEq  _         -> codeExpEq           
-  ExpNeq _         -> codeExpNeq          
-  ExpCond          -> codeExpCond         
-  ExpGt False _    -> codeExpGt           
-  ExpGt True  _    -> codeExpGe           
-  ExpLt False _    -> codeExpLt           
-  ExpLt True  _    -> codeExpLe           
-  ExpNot           -> codeExpNot          
-  ExpAnd           -> codeExpAnd          
-  ExpOr            -> codeExpOr           
-  ExpMul           -> codeExpMul          
-  ExpMod           -> codeExpMod
-  ExpAdd           -> codeExpAdd          
-  ExpSub           -> codeExpSub          
-  ExpNegate        -> codeExpNegate       
-  ExpAbs           -> codeExpAbs          
-  ExpSignum        -> codeExpSignum       
-  a -> error $ "ExpOp not supported: " ++ show a
+  intrinsicEncode a = case a of
+    ExpEq  _         -> codeExpEq           
+    ExpNeq _         -> codeExpNeq          
+    ExpCond          -> codeExpCond         
+    ExpGt False _    -> codeExpGt           
+    ExpGt True  _    -> codeExpGe           
+    ExpLt False _    -> codeExpLt           
+    ExpLt True  _    -> codeExpLe           
+    ExpNot           -> codeExpNot          
+    ExpAnd           -> codeExpAnd          
+    ExpOr            -> codeExpOr           
+    ExpMul           -> codeExpMul          
+    ExpMod           -> codeExpMod
+    ExpAdd           -> codeExpAdd          
+    ExpSub           -> codeExpSub          
+    ExpNegate        -> codeExpNegate       
+    ExpAbs           -> codeExpAbs          
+    ExpSignum        -> codeExpSignum       
+    a -> error $ "ExpOp not supported: " ++ show a
 
 codeExpEq            = 0
 codeExpNeq           = 1
@@ -102,23 +97,23 @@ codeExpMod           = 16
 
 intrinsicImp :: Expr -> (Int -> Expr) -> Expr
 intrinsicImp op arg = case' op
-  [ (codeExpEq            , if' (equal (arg 0) (arg 1)) 1 0)
-  , (codeExpNeq           , if' (not' (equal (arg 0) (arg 1))) 1 0)
-  , (codeExpCond          , if' (zip' (arg 0)) (arg 2) (arg 1))
-  , (codeExpGt            , if' (call ">"  [arg 0, arg 1]) 1 0)
-  , (codeExpGe            , if' (call ">=" [arg 0, arg 1]) 1 0)
-  , (codeExpLt            , if' (call "<"  [arg 0, arg 1]) 1 0)
-  , (codeExpLe            , if' (call "<=" [arg 0, arg 1]) 1 0)
-  , (codeExpNot           , if' (zip' (arg 0)) 1 0)
-  , (codeExpAnd           , if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1)
-  , (codeExpOr            , if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1)
-  , (codeExpMul           , arg 0 * arg 1)
-  , (codeExpMod           , mod' (arg 0) (arg 1))
-  , (codeExpAdd           , arg 0 + arg 1)
-  , (codeExpSub           , arg 0 - arg 1)
-  , (codeExpNegate        , 0 - arg 1)
-  , (codeExpAbs           , if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0))
-  , (codeExpSignum        , if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0)
+  [ (fromIntegral codeExpEq     , if' (equal (arg 0) (arg 1)) 1 0)
+  , (fromIntegral codeExpNeq    , if' (not' (equal (arg 0) (arg 1))) 1 0)
+  , (fromIntegral codeExpCond   , if' (zip' (arg 0)) (arg 2) (arg 1))
+  , (fromIntegral codeExpGt     , if' (call ">"  [arg 0, arg 1]) 1 0)
+  , (fromIntegral codeExpGe     , if' (call ">=" [arg 0, arg 1]) 1 0)
+  , (fromIntegral codeExpLt     , if' (call "<"  [arg 0, arg 1]) 1 0)
+  , (fromIntegral codeExpLe     , if' (call "<=" [arg 0, arg 1]) 1 0)
+  , (fromIntegral codeExpNot    , if' (zip' (arg 0)) 1 0)
+  , (fromIntegral codeExpAnd    , if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1)
+  , (fromIntegral codeExpOr     , if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1)
+  , (fromIntegral codeExpMul    , arg 0 * arg 1)
+  , (fromIntegral codeExpMod    , mod' (arg 0) (arg 1))
+  , (fromIntegral codeExpAdd    , arg 0 + arg 1)
+  , (fromIntegral codeExpSub    , arg 0 - arg 1)
+  , (fromIntegral codeExpNegate , 0 - arg 1)
+  , (fromIntegral codeExpAbs    , if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0))
+  , (fromIntegral codeExpSignum , if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0)
   ] 0
 
 -- | Given a expected result, verifies a module.
