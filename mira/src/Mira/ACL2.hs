@@ -29,6 +29,7 @@ module Mira.ACL2
   , or'
   , goodbye
   , integerp
+  , mod'
   ) where
 
 data SExpr
@@ -146,4 +147,7 @@ or' a b = call "or" [a, b]
 
 goodbye :: Expr
 goodbye = call "good-bye" []
+
+mod' :: Expr -> Expr -> Expr
+mod' a b = call "mod" [a, b]
 

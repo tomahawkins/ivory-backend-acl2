@@ -1,14 +1,16 @@
 -- | A CPS IR.
 module Mira.CPS
-  ( Proc      (..)
-  , Value     (..)
-  , Literal   (..)
-  , Cont      (..)
+  ( Proc         (..)
+  , Value        (..)
+  , Literal      (..)
+  , Cont         (..)
+  , Intrinsics   (..)
   , Var
   , variables
   , contFreeVars
   , alphaConvert
   , explicitStack
+  , replaceCont
   ) where
 
 import Data.List
@@ -21,7 +23,7 @@ type Var = String
 data Proc a = Proc Var [Var] (Cont a)
 
 instance Show a => Show (Proc a) where
-  show (Proc name args body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (show body)
+  show (Proc name args body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ show body)
 
 -- | Literals.
 data Literal
@@ -67,6 +69,15 @@ instance Show a => Show (Value a) where
     Pop              -> "pop"
     Intrinsic a args -> printf "(%s) (%s)" (show a) (intercalate ", " args)
 
+instance Num (Value a) where
+  (+)    = error "Method not supported for Num Value."
+  (-)    = error "Method not supported for Num Value."
+  (*)    = error "Method not supported for Num Value."
+  negate = error "Method not supported for Num Value."
+  abs    = error "Method not supported for Num Value."
+  signum = error "Method not supported for Num Value."
+  fromInteger = Literal . fromInteger
+
 -- | Continuations.
 data Cont a
   = Halt                                    -- ^ End the program or loop.
@@ -90,9 +101,15 @@ instance Show a => Show (Cont a) where
     Assert  a b          -> printf "assert %s\n%s" a (show b)
     Assume  a b          -> printf "assume %s\n%s" a (show b)
     Let     a b c        -> printf "let %s = %s\n%s" a (show b) (show c)
-    where
-    indent :: String -> String
-    indent = intercalate "\n" . map ("\t" ++) . lines
+
+indent :: String -> String
+indent = intercalate "\n" . map ("\t" ++) . lines
+
+class Intrinsics i where
+  add :: i
+  sub :: i
+  le  :: i
+  ge  :: i
 
 -- | All the variables in a CPS program.
 variables :: [Proc i] -> [Var]
@@ -193,7 +210,6 @@ alphaConvert procs = fst $ runId $ runStateT (0, undefined) $ mapM proc procs
         Pop           -> do { return Pop }
         Intrinsic i a -> do { a <- mapM ref a; return $ Intrinsic i a }
 
-
 -- | Convert a procedure to make explicit use of the stack to save and restore variables across procedure calls.
 explicitStack :: Proc i -> Proc i
 explicitStack (Proc name args body) = Proc name args $ cont body
@@ -217,6 +233,22 @@ explicitStack (Proc name args body) = Proc name args $ cont body
     Assert  a b         -> Assert a $ cont b
     Assume  a b         -> Assume a $ cont b
     Let     a b c       -> Let a b $ cont c
+
+-- | Replace a continuation given a pattern to match.
+replaceCont :: (Cont i -> Maybe (Cont i)) -> Cont i -> Cont i
+replaceCont replacement a = case replacement a of
+  Just a  -> a
+  Nothing -> case a of
+    Halt          -> Halt
+    Call    a b c -> Call a b c
+    Return  a     -> Return a
+    Push    a b   -> Push a $ rep b
+    Let     a b c -> Let a b $ rep c
+    If      a b c -> If a (rep b) (rep c)
+    Assert  a b   -> Assert a $ rep b
+    Assume  a b   -> Assume a $ rep b
+  where
+  rep = replaceCont replacement
 
 {-
 

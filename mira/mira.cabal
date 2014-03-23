@@ -19,6 +19,7 @@ library
     --process  >= 1.1,
     monadLib >= 3.7.2
   exposed-modules:
+    Mira
     Mira.ACL2
     Mira.ACL2ConvertCPS
     Mira.ACL2ConvertRTL

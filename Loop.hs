@@ -15,11 +15,16 @@ someLoopFunc = proc "someLoopFunc" $ \ix ->
      n <- deref ref
      store ref (n+1)
    ret =<< deref ref
-   --call someLoopFunc ix
-   --ret 0
+
+callForever :: Def ('[] :-> Uint32)
+callForever = proc "callForever" $ body $ do
+  call callForever
+  ret 0
 
 main :: IO ()
 main = do
   pass <- verifyTermination $ package "loop" $ incl someLoopFunc
   putStrLn (if pass then "pass" else "FAIL")
+  pass <- verifyTermination $ package "callForever" $ incl callForever
+  putStrLn (if not pass then "pass" else "FAIL")
 

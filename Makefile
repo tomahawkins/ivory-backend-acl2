@@ -27,7 +27,7 @@ ivory-backend-acl2/dist/setup-config: mira ivory-backend-acl2/src/Ivory/Compile/
 
 .PHONY: mira
 mira: mira/dist/setup-config
-mira/dist/setup-config: mira/src/Mira/*.hs
+mira/dist/setup-config: mira/src/Mira.hs mira/src/Mira/*.hs
 	cd mira && cabal build
 	cd mira && cabal install --force-reinstalls
 
@@ -35,6 +35,7 @@ mira/dist/setup-config: mira/src/Mira/*.hs
 clean:
 	cd mira               && cabal clean
 	cd ivory-backend-acl2 && cabal clean
+	-rm *.cll
 	-rm *.cps1
 	-rm *.cps2
 	-rm *.rtl

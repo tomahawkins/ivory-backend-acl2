@@ -14,12 +14,20 @@ type RTL i = R.RTL [Proc i] i
 -- | Convert a list of CPS procedures converted with an explicit stack to an RTL program.
 rtlConvert :: [Proc i] -> Program i
 rtlConvert procs = snd $ elaborate procs $ do
-  label "start"
-  pushCont "done"
-  jump "main"
-  mapM_ proc procs
-  label "done"
-  halt
+  if hasMain
+    then do
+      label "start"
+      pushCont "done"
+      jump "main"
+      mapM_ proc procs
+      label "done"
+      halt
+    else do
+      label "start"
+      halt
+      mapM_ proc procs
+  where
+  hasMain = not $ null [ () | Proc "main" _ _ <- procs ]
 
 proc :: Proc i -> RTL i ()
 proc (Proc name args body) = do

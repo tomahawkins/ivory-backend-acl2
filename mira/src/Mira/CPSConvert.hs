@@ -3,13 +3,15 @@ module Mira.CPSConvert
   ( cpsConvert
   ) where
 
+import Debug.Trace
+
 import Data.List (delete)
 import MonadLib
 
 import qualified Mira.CLL as C
 import Mira.CPS
 
-cpsConvert :: [C.Proc i] -> [Proc i]
+cpsConvert :: Intrinsics i => [C.Proc i] -> [Proc i]
 cpsConvert = snd . snd . runId . runStateT (0, []) . mapM cpsConvertProc
 
 type CPS i = StateT (Int, [Proc i]) Id
@@ -19,7 +21,7 @@ addProc fun args cont = do
   (i, procs) <- get
   set (i, procs ++ [Proc fun args cont])
 
-cpsConvertProc :: C.Proc i -> CPS i ()
+cpsConvertProc :: Intrinsics i => C.Proc i -> CPS i ()
 cpsConvertProc (C.Proc fun args body) = do
   cont <- cpsStmts body Halt
   addProc fun args cont
@@ -30,7 +32,7 @@ genVar = do
   set (i + 1, p)
   return $ "_cps" ++ show i
 
-cpsStmts :: [C.Stmt i] -> Cont i -> CPS i (Cont i)
+cpsStmts :: Intrinsics i => [C.Stmt i] -> Cont i -> CPS i (Cont i)
 cpsStmts a cont = case a of
   [] -> return cont
   a : b -> do
@@ -60,13 +62,22 @@ cpsStmts a cont = case a of
         f args a = case a of
           [] -> return $ Call fun args $ Just $ Let result (Var "retval") cont
           a : b -> cpsExpr a $ \ a -> f (args ++ [a]) b
-      C.Loop i init incr to body -> do  -- XXX Need to add a check to ensure loop body doesn't have any return statements.
+
+      -- XXX Need to add a check to ensure loop body doesn't have any return statements.
+      C.Loop i init incr to body -> cpsExpr init $ \ init -> cpsExpr to $ \ to -> do
         body <- cpsStmts body Halt
-        let args = delete i $ contFreeVars body
-        cpsExpr init $ \ init -> cpsExpr to $ \ to -> do
-          f <- genVar
-          addProc f (i : args) $ body --XXX Need to add conditional and replace Halt with recursive call and return.
-          return $ Call f (init : args) $ Just cont
+        let args' = delete i $ delete to $ contFreeVars body
+            args  = i : to : args'
+        fun  <- genVar
+        test <- genVar
+        one  <- genVar
+        addProc fun args $ Let test (Intrinsic (if incr then le else ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
+        trace ("loop body function: " ++ fun) $ return $ Call fun (init : to : args') $ Just cont
+        where
+        -- Replace Halt with recursive call.
+        f fun i args one a = case a of
+          Halt -> Just $ Let one 0 $ Let i (Intrinsic (if incr then add else sub) [i, one]) $ Call fun args Nothing
+          _    -> Nothing
 
 cpsExpr :: C.Expr i -> (Var -> CPS i (Cont i)) -> CPS i (Cont i)
 cpsExpr a k = case a of

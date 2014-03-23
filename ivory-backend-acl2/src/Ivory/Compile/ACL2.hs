@@ -10,14 +10,11 @@ import Data.List
 import System.IO
 import System.Process
 
+import Mira
 import Mira.ACL2 hiding (var, lit)
-import Mira.ACL2ConvertCPS
-import Mira.ACL2ConvertRTL
 import qualified Mira.CLL as C
 import Mira.CLL (Var, Literal (..))
-import Mira.CPS (explicitStack)
-import Mira.CPSConvert
-import Mira.RTLConvert
+import Mira.CPS (Intrinsics (..))
 
 import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Language.Syntax.AST (Module (..), ExpOp (..))
@@ -25,18 +22,20 @@ import Ivory.Language.Syntax.Type
 import qualified Ivory.Language.Syntax.Names as I
 
 -- | Compiles a module to two different ACL2 representations: assembly and CPS.
-compileModule :: Module -> (String, [Expr], [Expr])
-compileModule m = (name, acl21, acl22)
+compileModule :: Module -> IO String
+compileModule m = do
+  compile name intrinsics intrinsicCode intrinsicImp $ map cllConvert $ procs m
+  return name
   where
-  cll   = map cllConvert $ procs m
-  cps1  = cpsConvert cll
-  cps2  = map explicitStack cps1
-  rtl   = rtlConvert        cps2
-  acl21 = acl2ConvertRTL intrinsicCode intrinsicImp rtl 
-  acl22 = acl2ConvertCPS intrinsics cps2
   name = modName m
   procs :: I.Module -> [I.Proc]
   procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)
+
+instance Intrinsics ExpOp where
+  add = ExpAdd
+  sub = ExpSub
+  ge  = ExpGt True TyVoid
+  le  = ExpLt True TyVoid
 
 -- Intrinsic implementation for ACL2 (CPS form).
 intrinsics :: ExpOp -> [Expr] -> Expr
@@ -52,6 +51,7 @@ intrinsics op args = case op of
   ExpAnd           -> if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1
   ExpOr            -> if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1
   ExpMul           -> arg 0 * arg 1
+  ExpMod           -> mod' (arg 0) (arg 1) 
   ExpAdd           -> arg 0 + arg 1
   ExpSub           -> arg 0 - arg 1
   ExpNegate        -> 0 - arg 1
@@ -74,6 +74,7 @@ intrinsicCode a = case a of
   ExpAnd           -> codeExpAnd          
   ExpOr            -> codeExpOr           
   ExpMul           -> codeExpMul          
+  ExpMod           -> codeExpMod
   ExpAdd           -> codeExpAdd          
   ExpSub           -> codeExpSub          
   ExpNegate        -> codeExpNegate       
@@ -97,6 +98,7 @@ codeExpSub           = 12
 codeExpNegate        = 13
 codeExpAbs           = 14
 codeExpSignum        = 15
+codeExpMod           = 16
 
 intrinsicImp :: Expr -> (Int -> Expr) -> Expr
 intrinsicImp op arg = case' op
@@ -111,6 +113,7 @@ intrinsicImp op arg = case' op
   , (codeExpAnd           , if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1)
   , (codeExpOr            , if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1)
   , (codeExpMul           , arg 0 * arg 1)
+  , (codeExpMod           , mod' (arg 0) (arg 1))
   , (codeExpAdd           , arg 0 + arg 1)
   , (codeExpSub           , arg 0 - arg 1)
   , (codeExpNegate        , 0 - arg 1)
@@ -129,17 +132,16 @@ verifyModule expected m = do
 
   putStr $ "Verifying assertions of:  " ++ name ++ " ... "
   hFlush stdout
-  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2Asm
+  f <- readFile $ modName m ++ "-rtl.lisp"
+  (_, result, _) <- readProcessWithExitCode "acl2" [] f
   let pass = expected == (not $ any (isPrefixOf "ACL2 Error") $ lines result)
   putStrLn $ if pass then "pass" else "FAIL"
   writeFile (name ++ "_assertions.log") result
   hFlush stdout
 
   return $ terminates && pass
-
   where
-  (name, acl2Asm', _) = compileModule m
-  acl2Asm = unlines $ map show acl2Asm'
+  name = modName m
 
 -- | Verifies a list of modules.
 verifyModules :: [(Bool, Module)] -> IO Bool
@@ -150,14 +152,12 @@ verifyModules m = do
 -- | Verifies termination of a module.
 verifyTermination :: Module -> IO Bool
 verifyTermination m = do
-  writeFile (name ++ ".lisp") acl2CPS
-  (_, result, _) <- readProcessWithExitCode "acl2" [] acl2CPS
+  name <- compileModule m
+  f <- readFile $ name ++ "-cps.lisp"
+  (_, result, _) <- readProcessWithExitCode "acl2" [] f
   let terminates = not $ any (isPrefixOf "ACL2 Error") $ lines result
   writeFile (name ++ "_termination.log") result
   return terminates
-  where
-  (name, _, acl2CPS') = compileModule m
-  acl2CPS = unlines $ map show acl2CPS'
 
 cllConvert :: I.Proc -> C.Proc ExpOp
 cllConvert p = C.Proc (I.procSym p) (map (var . tValue) $ I.procArgs p) $ map cllStmt body
