@@ -3,6 +3,7 @@ module Mira.ACL2
   ( Expr (..)
   , mutualRecursion
   , defun
+  , defun'
   , defconst
   , defthm
   , call
@@ -68,7 +69,15 @@ mutualRecursion :: [Expr] -> Expr
 mutualRecursion = call "mutual-recursion"
 
 defun :: String -> [String] -> Expr -> Expr
-defun name args body = call "defun" $ [var name, obj $ map var args, body]
+defun name args body = call "defun" [var name, obj $ map var args, body]
+
+defun' :: String -> [String] -> Expr -> Expr -> Expr
+defun' name args measure body = call "defun"
+  [ var name
+  , obj $ map var args
+  , call "declare" [call "xargs" [var ":measure", call "nfix" [measure]]]
+  , body
+  ]
 
 defconst :: String -> Expr -> Expr
 defconst name const = call "defconst" [var name, const]

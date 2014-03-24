@@ -10,13 +10,13 @@ module Mira.CLL
 import Data.List
 import Text.Printf
 
-import Mira.CPS (Literal (..), Var)
-import Mira.Intrinsics
+import Mira.Expr
 
-data Proc = Proc Var [Var] [Stmt]
+data Proc = Proc Var [Var] (Maybe Expr) [Stmt]
 
 instance Show Proc where
-  show (Proc name args body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ concatMap show body)
+  show (Proc name args Nothing  body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ concatMap show body)
+  show (Proc name args (Just m) body) = printf "%s(%s)\n\tmeasure %s\n%s\n" name (intercalate ", " args) (show m) (indent $ concatMap show body)
 
 data Stmt
   = Call   (Maybe Var) Var [Expr]
@@ -41,15 +41,4 @@ instance Show Stmt where
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
-
-data Expr
-  = Var       Var
-  | Lit       Literal
-  | Intrinsic Intrinsic [Expr]
-
-instance Show Expr where
-  show a = case a of
-    Var a -> a
-    Lit a -> show a
-    Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " $ map show args)
 

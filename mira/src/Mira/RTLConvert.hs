@@ -27,10 +27,10 @@ rtlConvert procs = snd $ elaborate procs $ do
       halt
       mapM_ proc procs
   where
-  hasMain = not $ null [ () | Proc "main" _ _ <- procs ]
+  hasMain = not $ null [ () | Proc "main" _ _ _ <- procs ]
 
 proc :: Proc -> RTL ()
-proc (Proc name args body) = do
+proc (Proc name args _ body) = do
   comment $ "Procedure: " ++ name ++ "(" ++ intercalate ", " args ++ ")"
   label name
   cont body
@@ -39,7 +39,7 @@ cont :: Cont -> RTL ()
 cont a = case a of
   Call f args (Just k) -> do
     procs <- getMeta
-    let argVars = head [ args | Proc name args _ <- procs, name == f ] 
+    let argVars = head [ args | Proc name args _ _ <- procs, name == f ] 
     kLabel <- genVar
     comment "Push the continuation."
     pushCont kLabel
@@ -54,7 +54,7 @@ cont a = case a of
 
   Call f args Nothing -> do
     procs <- getMeta
-    let argVars = head [ args | Proc name args _ <- procs, name == f ] 
+    let argVars = head [ args | Proc name args _ _ <- procs, name == f ] 
     comment "Copy the arguments to the functions argument variables."
     sequence_ [ copy a b | (a, b) <- zip args argVars ]
     comment "Call the function."

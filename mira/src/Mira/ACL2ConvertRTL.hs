@@ -8,8 +8,7 @@ import Data.Maybe (fromJust)
 
 import Mira.ACL2
 import Mira.RTL
-import Mira.CPS (Literal (..))
-import Mira.Intrinsics
+import Mira.Expr hiding (Expr (..))
 
 acl2ConvertRTL :: Program -> [Expr]
 acl2ConvertRTL program@(Program instrs) = utils ++ instructionSemantics ++
@@ -175,11 +174,4 @@ assembleInstruction labelAddr varAddr' a = case a of
   Intrinsic a b c -> obj [codeIntrinsic, fromIntegral $ encodeIntrinsic a, obj (map varAddr b), varAddr c]
   where
   varAddr = fromIntegral . varAddr'
-
-showLit :: Literal -> String
-showLit a = case a of
-  LitInteger a -> show a
-  LitBool    True  -> "1"
-  LitBool    False -> "0"
-  a -> error $ "unsupported literal: " ++ show a
 

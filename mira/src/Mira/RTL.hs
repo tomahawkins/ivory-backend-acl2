@@ -32,10 +32,8 @@ import Data.List
 import MonadLib hiding (Label, jump)
 import Text.Printf
 
-import Mira.CPS (Literal)
-import Mira.Intrinsics
+import Mira.Expr hiding (Expr (Intrinsic))
 
-type Var   = String
 type Label = String
 data Program = Program [Instruction]
 

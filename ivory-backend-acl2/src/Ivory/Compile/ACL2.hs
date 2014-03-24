@@ -12,8 +12,7 @@ import System.Process
 
 import Mira
 import qualified Mira.CLL as C
-import Mira.CLL (Var, Literal (..))
-import Mira.Intrinsics
+import Mira.Expr
 
 import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Language.Syntax.AST (Module (..), ExpOp (..))
@@ -69,7 +68,7 @@ verifyTermination m = do
   return terminates
 
 cllConvert :: I.Proc -> C.Proc
-cllConvert p = C.Proc (I.procSym p) (map (var . tValue) $ I.procArgs p) $ map cllStmt body
+cllConvert p = C.Proc (I.procSym p) (map (var . tValue) $ I.procArgs p) Nothing $ map cllStmt body
   where
   body = requires ++ insertEnsures (I.procBody p)
   requires = map (I.Assert . cond . I.getRequire) $ I.procRequires p
@@ -123,10 +122,10 @@ cllStmt a = case a of
 
 cllExpr :: I.Expr -> C.Expr
 cllExpr a = case a of
-  I.ExpSym a -> C.Var a
-  I.ExpVar a -> C.Var $ var a
-  I.ExpLit a -> C.Lit $ lit a
-  I.ExpOp op args -> C.Intrinsic (cllIntrinsic op) $ map cllExpr args
+  I.ExpSym a -> Var a
+  I.ExpVar a -> Var $ var a
+  I.ExpLit a -> Literal $ lit a
+  I.ExpOp op args -> Intrinsic (cllIntrinsic op) $ map cllExpr args
   a -> error $ "Unsupported Ivory expression: " ++ show a
 
 cllIntrinsic :: ExpOp -> Intrinsic

@@ -7,9 +7,8 @@ import Data.Maybe (fromJust)
 import MonadLib
 
 import Mira.ACL2
-import Mira.ACL2ConvertRTL (showLit)
 import Mira.CPS
-import Mira.Intrinsics
+import Mira.Expr (intrinsicACL2, showLit, exprACL2)
 import Mira.RecTopoSort
 
 type CN = StateT (Int, [Expr], [(String, Expr)]) Id
@@ -56,14 +55,15 @@ acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
   mutualRecGroups = map mutualRec $ recTopoSort callees defuns
 
 proc :: Proc -> CN ()
-proc (Proc name args body) = do
+proc (Proc name args measure body) = do
   body <- cont body
-  addFun name ("stack" : args) $ if' (foldl (and') t $ map (integerp . var) args) body nil
-
-addFun :: String -> [String] -> Expr -> CN ()
-addFun name args body = do
-  (i, f, c) <- get
-  set (i, f ++ [defun name args body], c)
+  case measure of
+    Nothing -> do
+      (i, f, c) <- get
+      set (i, f ++ [defun name ("stack" : args) (if' (foldl (and') t $ map (integerp . var) args) body nil)], c)
+    Just m -> do 
+      (i, f, c) <- get
+      set (i, f ++ [defun' name ("stack" : args) (exprACL2 m) (if' (foldl (and') t $ map (integerp . var) args) body nil)], c)
 
 addCont :: Cont -> CN String
 addCont body = do  -- stack and retval are args to continuation function.

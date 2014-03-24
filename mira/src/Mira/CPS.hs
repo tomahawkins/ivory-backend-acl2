@@ -7,54 +7,22 @@ module Mira.CPS
   , Var
   , variables
   , contFreeVars
-  , alphaConvert
   , explicitStack
   , replaceCont
   ) where
 
 import Data.List
-import MonadLib
 import Text.Printf
 
-import Mira.Intrinsics
+import Mira.Expr hiding (Expr (..))
+import qualified Mira.Expr as E
 
-type Var = String
-
--- | A procedure is a name, a list of arguments, and its continuation (body).
-data Proc = Proc Var [Var] Cont
+-- | A procedure is a name, a list of arguments, an optional measure, and its continuation (body).
+data Proc = Proc Var [Var] (Maybe E.Expr) Cont
 
 instance Show Proc where
-  show (Proc name args body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ show body)
-
--- | Literals.
-data Literal
-  = LitInteger Integer
-  | LitFloat Float
-  | LitDouble Double
-  | LitChar Char
-  | LitBool Bool
-  | LitNull
-  | LitString String
-  deriving Eq
-
-instance Show Literal where
-  show a = case a of
-    LitInteger a -> show a
-    LitFloat   a -> show a
-    LitDouble  a -> show a
-    LitChar    a -> show a
-    LitBool    a -> show a
-    LitString  a -> show a
-    LitNull      -> "null"
-
-instance Num Literal where
-  (+)    = error "Method not supported for Num Literal."
-  (-)    = error "Method not supported for Num Literal."
-  (*)    = error "Method not supported for Num Literal."
-  negate = error "Method not supported for Num Literal."
-  abs    = error "Method not supported for Num Literal."
-  signum = error "Method not supported for Num Literal."
-  fromInteger = LitInteger
+  show (Proc name args Nothing  body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ show body)
+  show (Proc name args (Just m) body) = printf "%s(%s)\n\tmeasure %s\n%s\n" name (intercalate ", " args) (show m) (indent $ show body)
 
 -- | Values used in let bindings.
 data Value
@@ -68,7 +36,7 @@ instance Show Value where
     Var a            -> a
     Literal a        -> show a
     Pop              -> "pop"
-    Intrinsic a args -> printf "(%s) (%s)" (show a) (intercalate ", " args)
+    Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " args)
 
 instance Num Value where
   (+)    = error "Method not supported for Num Value."
@@ -111,7 +79,7 @@ variables :: [Proc] -> [Var]
 variables = nub . ("retval" :) . concatMap proc
   where
   proc :: Proc -> [Var]
-  proc (Proc _ args body) = args ++ cont body
+  proc (Proc _ args _ body) = args ++ cont body
 
   cont :: Cont -> [Var]
   cont a = case a of
@@ -155,59 +123,9 @@ contFreeVars = nub . cont ["retval"]
     var :: Var -> [Var]
     var a = if elem a i then [] else [a]
 
-type Alpha = StateT (Int, [(Var, Var)]) Id
-
--- Creates a new name for an introduced variable.
-newVar :: Var -> Alpha Var
-newVar a = do
-  (i, env) <- get
-  let a' = "_cpsAlphaConvert" ++ show i ++ "_" ++ a
-  set (i + 1, (a, a') : env)
-  return a'
-
--- Replaces variable reference with new name.
-ref :: Var -> Alpha Var
-ref a = do
-  (_, env) <- get
-  case lookup a env of
-    Nothing -> error $ "Variable not found: " ++ a ++ "\n" ++ unlines (map show env)
-    Just a  -> return a
-
--- | Alpha conversion makes all variables unique.
-alphaConvert :: [Proc] -> [Proc]
-alphaConvert procs = fst $ runId $ runStateT (0, undefined) $ mapM proc procs
-  where
-  proc :: Proc -> Alpha Proc
-  proc (Proc name args body) = do
-    (i, _) <- get
-    set (i, [("retval", "retval")])
-    args <- mapM newVar args
-    body <- cont body
-    return $ Proc name args body
-
-  cont :: Cont -> Alpha Cont
-  cont a = case a of
-    Halt             -> return Halt
-    Call    a b Nothing    -> do { b <- mapM ref b;              return $ Call a b Nothing }
-    Call    a b (Just c)   -> do { b <- mapM ref b; c <- cont c; return $ Call a b $ Just c }
-    Return  (Just a) -> do { a <- ref a; return $ Return $ Just a }
-    Return  Nothing  -> do { return $ Return Nothing }
-    Push    a b      -> do { a <- ref a; b <- cont b; return $ Push a b }
-    If      a b c    -> do { a <- ref a; b <- cont b; c <- cont c; return $ If a b c }
-    Assert  a b      -> do { a <- ref a; b <- cont b; return $ Assert a b }
-    Assume  a b      -> do { a <- ref a; b <- cont b; return $ Assume a b }
-    Let     a b c    -> do { b <- value b; a <- newVar a; c <- cont c; return $ Let a b c }
-      where
-      value :: Value -> Alpha Value
-      value a = case a of
-        Var       a   -> do { a <- ref a; return $ Var a }
-        Literal   a   -> do { return $ Literal a }
-        Pop           -> do { return Pop }
-        Intrinsic i a -> do { a <- mapM ref a; return $ Intrinsic i a }
-
 -- | Convert a procedure to make explicit use of the stack to save and restore variables across procedure calls.
 explicitStack :: Proc -> Proc
-explicitStack (Proc name args body) = Proc name args $ cont body
+explicitStack (Proc name args measure body) = Proc name args measure $ cont body
   where
   cont :: Cont -> Cont
   cont a = case a of

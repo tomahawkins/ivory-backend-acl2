@@ -8,22 +8,23 @@ import MonadLib
 
 import qualified Mira.CLL as C
 import Mira.CPS
-import Mira.Intrinsics
+import Mira.Expr (Expr, Intrinsic (Add, Sub, Le, Ge))
+import qualified Mira.Expr as E
 
 cpsConvert :: [C.Proc] -> [Proc]
 cpsConvert = snd . snd . runId . runStateT (0, []) . mapM cpsConvertProc
 
 type CPS = StateT (Int, [Proc]) Id
 
-addProc :: Var -> [Var] -> Cont -> CPS ()
-addProc fun args cont = do
+addProc :: Var -> [Var] -> Maybe (Expr) -> Cont -> CPS ()
+addProc fun args measure cont = do
   (i, procs) <- get
-  set (i, procs ++ [Proc fun args cont])
+  set (i, procs ++ [Proc fun args measure cont])
 
 cpsConvertProc :: C.Proc -> CPS ()
-cpsConvertProc (C.Proc fun args body) = do
+cpsConvertProc (C.Proc fun args measure body) = do
   cont <- cpsStmts body Halt
-  addProc fun args cont
+  addProc fun args measure cont
 
 genVar :: CPS Var
 genVar = do
@@ -40,7 +41,7 @@ cpsStmts a cont = case a of
       C.If a b c -> do
         f <- genVar
         let args = contFreeVars cont
-        addProc f args cont
+        addProc f args Nothing cont
         b <- cpsStmts b $ Call f args Nothing
         c <- cpsStmts c $ Call f args Nothing
         cpsExpr a $ \ a -> return $ If a b c
@@ -70,18 +71,18 @@ cpsStmts a cont = case a of
         fun  <- genVar
         test <- genVar
         one  <- genVar
-        addProc fun args $ Let test (Intrinsic (if incr then Le else Ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
+        addProc fun args (Just $ E.Intrinsic Sub [E.Var i, E.Var to]) $ Let test (Intrinsic (if incr then Le else Ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
         return $ Call fun (init : to : args') $ Just cont
         where
         -- Replace Halt with recursive call.
         f fun i args one a = case a of
-          Halt -> Just $ Let one 0 $ Let i (Intrinsic (if incr then Add else Sub) [i, one]) $ Call fun args Nothing
+          Halt -> Just $ Let one 1 $ Let i (Intrinsic (if incr then Add else Sub) [i, one]) $ Call fun args Nothing
           _    -> Nothing
 
 cpsExpr :: C.Expr -> (Var -> CPS Cont) -> CPS Cont
 cpsExpr a k = case a of
   C.Var a -> k a
-  C.Lit a -> do
+  C.Literal a -> do
     v <- genVar
     cont <- k v
     return $ Let v (Literal a) cont
