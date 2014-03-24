@@ -71,7 +71,9 @@ cpsStmts a cont = case a of
         fun  <- genVar
         test <- genVar
         one  <- genVar
-        addProc fun args (Just $ E.Intrinsic Sub [E.Var i, E.Var to]) $ Let test (Intrinsic (if incr then Le else Ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
+        addProc fun args
+          (Just $ E.Intrinsic Add [E.Literal $ LitInteger 1, E.Intrinsic Sub [E.Var i, E.Var to]]) $
+          Let test (Intrinsic (if incr then Le else Ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
         return $ Call fun (init : to : args') $ Just cont
         where
         -- Replace Halt with recursive call.
