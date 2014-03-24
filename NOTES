@@ -1,3 +1,0 @@
-Q: Why isn't the recursive continuation called in loop-cps.lisp?
-Q: Can we consolidate the intrinsic defs in Ivory/../ACL2?
-
