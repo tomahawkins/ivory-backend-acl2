@@ -60,28 +60,23 @@ proc (Proc name args body) = do
   body <- cont body
   addFun name ("stack" : args) $ if' (foldl (and') t $ map (integerp . var) args) body nil
 
-genContName :: CN String
-genContName = do
-  (i, f, c) <- get
-  set (i + 1, f, c)
-  return $ "_cont_" ++ show i
-
 addFun :: String -> [String] -> Expr -> CN ()
 addFun name args body = do
   (i, f, c) <- get
   set (i, f ++ [defun name args body], c)
 
-addCont :: String -> Expr -> CN ()
-addCont name body = do  -- stack and retval are free in body.
+addCont :: Cont -> CN String
+addCont body = do  -- stack and retval are args to continuation function.
+  body <- cont body
   (i, f, c) <- get
-  set (i, f, c ++ [(name, body)])
+  let name = "_cont_" ++ show i
+  set (i + 1, f, c ++ [(name, body)])
+  return name
 
 cont :: Cont -> CN Expr
 cont a = case a of
   Call f args (Just ret) -> do
-    name <- genContName
-    ret  <- cont ret
-    addCont name ret
+    name <- addCont ret
     return $ call f $ cons (lit $ show name) stack : map var args
   Call f args Nothing -> return $ call f $ stack : map var args
   Halt         -> return nil
@@ -92,10 +87,10 @@ cont a = case a of
   Let    a b c -> do
     c <- cont c
     case b of
-      Var     b -> return $ let' [(a, var b)] c
-      Literal b -> return $ let' [(a, lit $ showLit b)] c
-      Pop       -> return $ let' [(a, car stack), ("stack", cdr stack)] c
-      Intrinsic i args -> return $ intrinsicACL2 i (map var args !!)
+      Var     b        -> return $ let' [(a, var b)] c
+      Literal b        -> return $ let' [(a, lit $ showLit b)] c
+      Pop              -> return $ let' [(a, car stack), ("stack", cdr stack)] c
+      Intrinsic i args -> return $ let' [(a, intrinsicACL2 i (map var args !!))] c
   Return (Just a) -> return $ call "call-cont" [stack, var a]
   Return Nothing  -> return $ call "call-cont" [stack, nil]
 

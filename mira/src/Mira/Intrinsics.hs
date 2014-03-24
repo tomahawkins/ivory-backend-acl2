@@ -70,7 +70,7 @@ intrinsicACL2 a arg = case a of
   Mod    -> mod' (arg 0) (arg 1) 
   Add    -> arg 0 + arg 1
   Sub    -> arg 0 - arg 1
-  Negate -> 0 - arg 1
+  Negate -> 0 - arg 0
   Abs    -> if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0)
   Signum -> if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0
 
