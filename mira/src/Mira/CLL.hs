@@ -11,22 +11,23 @@ import Data.List
 import Text.Printf
 
 import Mira.CPS (Literal (..), Var)
+import Mira.Intrinsics
 
-data Proc i = Proc Var [Var] [Stmt i]
+data Proc = Proc Var [Var] [Stmt]
 
-instance Show i => Show (Proc i) where
+instance Show Proc where
   show (Proc name args body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ concatMap show body)
 
-data Stmt i
-  = Call   (Maybe Var) Var [Expr i]
-  | If     (Expr i) [Stmt i] [Stmt i]
-  | Return (Maybe (Expr i))
-  | Assert (Expr i)
-  | Assume (Expr i)
-  | Let    Var (Expr i)
-  | Loop   Var (Expr i) Bool (Expr i) [Stmt i]
+data Stmt
+  = Call   (Maybe Var) Var [Expr]
+  | If     Expr [Stmt] [Stmt]
+  | Return (Maybe Expr)
+  | Assert Expr
+  | Assume Expr
+  | Let    Var Expr
+  | Loop   Var Expr Bool Expr [Stmt]
 
-instance Show i => Show (Stmt i) where
+instance Show Stmt where
   show a = case a of
     Call    Nothing a b  -> printf "%s(%s)\n" a (intercalate ", " $ map show b)
     Call    (Just c) a b -> printf "%s = %s(%s)\n" c a (intercalate ", " $ map show b)
@@ -41,14 +42,14 @@ instance Show i => Show (Stmt i) where
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
 
-data Expr i
+data Expr
   = Var       Var
   | Lit       Literal
-  | Intrinsic i [Expr i]
+  | Intrinsic Intrinsic [Expr]
 
-instance Show i => Show (Expr i) where
+instance Show Expr where
   show a = case a of
     Var a -> a
     Lit a -> show a
-    Intrinsic a args -> printf "(%s) (%s)" (show a) (intercalate ", " $ map show args)
+    Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " $ map show args)
 

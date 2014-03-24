@@ -10,28 +10,28 @@ import qualified Mira.CLL as C
 import Mira.CPS
 import Mira.Intrinsics
 
-cpsConvert :: Intrinsics i => [C.Proc i] -> [Proc i]
+cpsConvert :: [C.Proc] -> [Proc]
 cpsConvert = snd . snd . runId . runStateT (0, []) . mapM cpsConvertProc
 
-type CPS i = StateT (Int, [Proc i]) Id
+type CPS = StateT (Int, [Proc]) Id
 
-addProc :: Var -> [Var] -> Cont i -> CPS i ()
+addProc :: Var -> [Var] -> Cont -> CPS ()
 addProc fun args cont = do
   (i, procs) <- get
   set (i, procs ++ [Proc fun args cont])
 
-cpsConvertProc :: Intrinsics i => C.Proc i -> CPS i ()
+cpsConvertProc :: C.Proc -> CPS ()
 cpsConvertProc (C.Proc fun args body) = do
   cont <- cpsStmts body Halt
   addProc fun args cont
 
-genVar :: CPS i Var
+genVar :: CPS Var
 genVar = do
   (i, p) <- get
   set (i + 1, p)
   return $ "_cps" ++ show i
 
-cpsStmts :: Intrinsics i => [C.Stmt i] -> Cont i -> CPS i (Cont i)
+cpsStmts :: [C.Stmt] -> Cont -> CPS Cont
 cpsStmts a cont = case a of
   [] -> return cont
   a : b -> do
@@ -70,15 +70,15 @@ cpsStmts a cont = case a of
         fun  <- genVar
         test <- genVar
         one  <- genVar
-        addProc fun args $ Let test (Intrinsic (if incr then intrinsicLE else intrinsicGE) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
+        addProc fun args $ Let test (Intrinsic (if incr then Le else Ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
         return $ Call fun (init : to : args') $ Just cont
         where
         -- Replace Halt with recursive call.
         f fun i args one a = case a of
-          Halt -> Just $ Let one 0 $ Let i (Intrinsic (if incr then intrinsicAdd else intrinsicSub) [i, one]) $ Call fun args Nothing
+          Halt -> Just $ Let one 0 $ Let i (Intrinsic (if incr then Add else Sub) [i, one]) $ Call fun args Nothing
           _    -> Nothing
 
-cpsExpr :: C.Expr i -> (Var -> CPS i (Cont i)) -> CPS i (Cont i)
+cpsExpr :: C.Expr -> (Var -> CPS Cont) -> CPS Cont
 cpsExpr a k = case a of
   C.Var a -> k a
   C.Lit a -> do

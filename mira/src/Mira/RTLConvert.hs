@@ -9,10 +9,10 @@ import Mira.CPS as C
 import Mira.RTL hiding (RTL, Var)
 import qualified Mira.RTL as R
 
-type RTL i = R.RTL [Proc i] i
+type RTL = R.RTL [Proc]
 
 -- | Convert a list of CPS procedures converted with an explicit stack to an RTL program.
-rtlConvert :: [Proc i] -> Program i
+rtlConvert :: [Proc] -> Program
 rtlConvert procs = snd $ elaborate procs $ do
   if hasMain
     then do
@@ -29,13 +29,13 @@ rtlConvert procs = snd $ elaborate procs $ do
   where
   hasMain = not $ null [ () | Proc "main" _ _ <- procs ]
 
-proc :: Proc i -> RTL i ()
+proc :: Proc -> RTL ()
 proc (Proc name args body) = do
   comment $ "Procedure: " ++ name ++ "(" ++ intercalate ", " args ++ ")"
   label name
   cont body
 
-cont :: Cont i -> RTL i ()
+cont :: Cont -> RTL ()
 cont a = case a of
   Call f args (Just k) -> do
     procs <- getMeta

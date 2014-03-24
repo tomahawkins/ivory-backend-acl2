@@ -11,8 +11,8 @@ import Mira.RTL
 import Mira.CPS (Literal (..))
 import Mira.Intrinsics
 
-acl2ConvertRTL :: Intrinsics i => (Expr -> (Int -> Expr) -> Expr) -> Program i -> [Expr]
-acl2ConvertRTL intrinsics program@(Program instrs) = utils ++ instructionSemantics intrinsics ++
+acl2ConvertRTL :: Program -> [Expr]
+acl2ConvertRTL program@(Program instrs) = utils ++ instructionSemantics ++
   [ step
   , stepN
   , defconst "*rtl-init-state*" $ quote $ obj [obj $ map (assembleInstruction labs vars) instrs, nil, nil, labs "start"]
@@ -88,8 +88,8 @@ pushDataStack s a = call "push-data-stack" [s, a]
 popDataStack  s   = call "pop-data-stack"  [s]
 incrPC        s   = call "incr-pc"         [s]
 
-instructionSemantics :: (Expr -> (Int -> Expr) -> Expr) -> [Expr]
-instructionSemantics intrinsics =
+instructionSemantics :: [Expr]
+instructionSemantics =
   [ defun "rtl-comment"   ["s"]                $ incrPC s
   , defun "rtl-label"     ["s"]                $ incrPC s
   , defun "rtl-return"    ["s"]                $ let' [("a", popCallStack s)] $ setPC (car a) (cdr a)
@@ -102,7 +102,8 @@ instructionSemantics intrinsics =
   , defun "rtl-pop"       ["s", "a"]           $ incrPC $ let' [("b", popDataStack s), ("s", car b), ("b", cdr b)] $ setDataMem s $ replaceNth a (getDataMem s) b 
   , defun "rtl-copy"      ["s", "a", "b"]      $ incrPC $ setDataMem s $ replaceNth b (getDataMem s) $ nth a $ getDataMem s
   , defun "rtl-const"     ["s", "a", "b"]      $ incrPC $ setDataMem s $ replaceNth b (getDataMem s) a
-  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ let' [("mem", getDataMem s)] $ replaceNth c mem $ intrinsics a arg
+  , defun "rtl-intrinsic" ["s", "a", "b", "c"] $ incrPC $ setDataMem s $ let' [("mem", getDataMem s)] $ replaceNth c mem $ case' a
+    [ (fromIntegral $ encodeIntrinsic a, intrinsicACL2 a arg) | a <- allIntrinsics ] 0
   ]
   where
   s = var "s"
@@ -157,7 +158,7 @@ codeConst     = 11
 codeIntrinsic = 12
 
 -- | Assemble an intruction into ACL2.
-assembleInstruction :: Intrinsics i => (Label -> Expr) -> (Var -> Int) -> Instruction i -> Expr
+assembleInstruction :: (Label -> Expr) -> (Var -> Int) -> Instruction -> Expr
 assembleInstruction labelAddr varAddr' a = case a of
   Comment   _     -> obj [codeComment                              ]
   Label     _     -> obj [codeLabel                                ]
@@ -171,7 +172,7 @@ assembleInstruction labelAddr varAddr' a = case a of
   Pop       a     -> obj [codePop,       varAddr a                 ]
   PushCont  a     -> obj [codePushCont,  labelAddr a               ]
   Const     a b   -> obj [codeConst,     lit $ showLit a, varAddr b   ]
-  Intrinsic a b c -> obj [codeIntrinsic, fromIntegral $ intrinsicEncode a, obj (map varAddr b), varAddr c]
+  Intrinsic a b c -> obj [codeIntrinsic, fromIntegral $ encodeIntrinsic a, obj (map varAddr b), varAddr c]
   where
   varAddr = fromIntegral . varAddr'
 

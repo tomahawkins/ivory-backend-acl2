@@ -1,4 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
 -- | Compile CPS directly to ACL2.
 module Mira.ACL2ConvertCPS
   ( acl2ConvertCPS
@@ -13,9 +12,9 @@ import Mira.CPS
 import Mira.Intrinsics
 import Mira.RecTopoSort
 
-type CN i = StateT (Int, [Expr], [(String, Expr)]) Id
+type CN = StateT (Int, [Expr], [(String, Expr)]) Id
 
-acl2ConvertCPS :: Intrinsics i => [Proc i] -> [Expr]
+acl2ConvertCPS :: [Proc] -> [Expr]
 acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
   where
   ((), (n, funs, conts)) = runId $ runStateT (0, [], []) $ mapM_ proc procs
@@ -56,28 +55,28 @@ acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
 
   mutualRecGroups = map mutualRec $ recTopoSort callees defuns
 
-proc :: Intrinsics i => Proc i -> CN i ()
+proc :: Proc -> CN ()
 proc (Proc name args body) = do
   body <- cont body
   addFun name ("stack" : args) $ if' (foldl (and') t $ map (integerp . var) args) body nil
 
-genContName :: CN i String
+genContName :: CN String
 genContName = do
   (i, f, c) <- get
   set (i + 1, f, c)
   return $ "_cont_" ++ show i
 
-addFun :: String -> [String] -> Expr -> CN i ()
+addFun :: String -> [String] -> Expr -> CN ()
 addFun name args body = do
   (i, f, c) <- get
   set (i, f ++ [defun name args body], c)
 
-addCont :: String -> Expr -> CN i ()
+addCont :: String -> Expr -> CN ()
 addCont name body = do  -- stack and retval are free in body.
   (i, f, c) <- get
   set (i, f, c ++ [(name, body)])
 
-cont :: Intrinsics i => Cont i -> CN i Expr
+cont :: Cont -> CN Expr
 cont a = case a of
   Call f args (Just ret) -> do
     name <- genContName
@@ -96,7 +95,7 @@ cont a = case a of
       Var     b -> return $ let' [(a, var b)] c
       Literal b -> return $ let' [(a, lit $ showLit b)] c
       Pop       -> return $ let' [(a, car stack), ("stack", cdr stack)] c
-      Intrinsic i args -> return $ intrinsicImpl i (map var args !!)
+      Intrinsic i args -> return $ intrinsicACL2 i (map var args !!)
   Return (Just a) -> return $ call "call-cont" [stack, var a]
   Return Nothing  -> return $ call "call-cont" [stack, nil]
 

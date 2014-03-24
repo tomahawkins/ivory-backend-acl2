@@ -16,12 +16,14 @@ import Data.List
 import MonadLib
 import Text.Printf
 
+import Mira.Intrinsics
+
 type Var = String
 
 -- | A procedure is a name, a list of arguments, and its continuation (body).
-data Proc a = Proc Var [Var] (Cont a)
+data Proc = Proc Var [Var] Cont
 
-instance Show a => Show (Proc a) where
+instance Show Proc where
   show (Proc name args body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ show body)
 
 -- | Literals.
@@ -55,20 +57,20 @@ instance Num Literal where
   fromInteger = LitInteger
 
 -- | Values used in let bindings.
-data Value a
+data Value
   = Var       Var         -- ^ A variable reference.
   | Literal   Literal     -- ^ A constant.
   | Pop                   -- ^ Pop a value off the stack.
-  | Intrinsic a [Var]     -- ^ An application of an intrinsic to a list of arguments.
+  | Intrinsic Intrinsic [Var]   -- ^ An application of an intrinsic to a list of arguments.
 
-instance Show a => Show (Value a) where
+instance Show Value where
   show a = case a of
     Var a            -> a
     Literal a        -> show a
     Pop              -> "pop"
     Intrinsic a args -> printf "(%s) (%s)" (show a) (intercalate ", " args)
 
-instance Num (Value a) where
+instance Num Value where
   (+)    = error "Method not supported for Num Value."
   (-)    = error "Method not supported for Num Value."
   (*)    = error "Method not supported for Num Value."
@@ -78,17 +80,17 @@ instance Num (Value a) where
   fromInteger = Literal . fromInteger
 
 -- | Continuations.
-data Cont a
-  = Halt                                    -- ^ End the program or loop.
-  | Call    Var [Var] (Maybe (Cont a))      -- ^ Push the continuation onto the stack (if one exists) and call a function with arguments.
-  | Return  (Maybe Var)                     -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
-  | Push    Var (Cont a)                    -- ^ Push a value onto the stack.
-  | Let     Var (Value a) (Cont a)          -- ^ Brings a new variable into scope and assigns it a value.
-  | If      Var (Cont a) (Cont a)           -- ^ Conditionally follow one continuation or another.
-  | Assert  Var (Cont a)                    -- ^ Assert a value and continue.
-  | Assume  Var (Cont a)                    -- ^ State an assumption and continue.
+data Cont
+  = Halt                            -- ^ End the program or loop.
+  | Call    Var [Var] (Maybe Cont)  -- ^ Push the continuation onto the stack (if one exists) and call a function with arguments.
+  | Return  (Maybe Var)             -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
+  | Push    Var Cont                -- ^ Push a value onto the stack.
+  | Let     Var Value Cont          -- ^ Brings a new variable into scope and assigns it a value.
+  | If      Var Cont Cont           -- ^ Conditionally follow one continuation or another.
+  | Assert  Var Cont                -- ^ Assert a value and continue.
+  | Assume  Var Cont                -- ^ State an assumption and continue.
 
-instance Show a => Show (Cont a) where
+instance Show Cont where
   show a = case a of
     Halt                 -> "halt\n"
     Call    a b Nothing  -> printf "%s(%s)\n" a (intercalate ", " b)
@@ -105,13 +107,13 @@ indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
 
 -- | All the variables in a CPS program.
-variables :: [Proc i] -> [Var]
+variables :: [Proc] -> [Var]
 variables = nub . ("retval" :) . concatMap proc
   where
-  proc :: Proc i -> [Var]
+  proc :: Proc -> [Var]
   proc (Proc _ args body) = args ++ cont body
 
-  cont :: Cont i -> [Var]
+  cont :: Cont -> [Var]
   cont a = case a of
     Halt             -> []
     Call    _ a b    -> a ++ case b of { Nothing -> []; Just b -> cont b }
@@ -130,10 +132,10 @@ variables = nub . ("retval" :) . concatMap proc
         Intrinsic _ a -> a
 
 -- | All free (unbound) variables in a continuation.
-contFreeVars :: Cont a -> [Var]
+contFreeVars :: Cont -> [Var]
 contFreeVars = nub . cont ["retval"]
   where
-  cont :: [Var] -> Cont a -> [Var]
+  cont :: [Var] -> Cont -> [Var]
   cont i a = case a of
     Call    _ args a -> concatMap var args ++ case a of { Nothing -> []; Just a -> cont i a }
     Return  _        -> []
@@ -172,10 +174,10 @@ ref a = do
     Just a  -> return a
 
 -- | Alpha conversion makes all variables unique.
-alphaConvert :: [Proc i] -> [Proc i]
+alphaConvert :: [Proc] -> [Proc]
 alphaConvert procs = fst $ runId $ runStateT (0, undefined) $ mapM proc procs
   where
-  proc :: Proc i -> Alpha (Proc i)
+  proc :: Proc -> Alpha Proc
   proc (Proc name args body) = do
     (i, _) <- get
     set (i, [("retval", "retval")])
@@ -183,7 +185,7 @@ alphaConvert procs = fst $ runId $ runStateT (0, undefined) $ mapM proc procs
     body <- cont body
     return $ Proc name args body
 
-  cont :: Cont i -> Alpha (Cont i)
+  cont :: Cont -> Alpha Cont
   cont a = case a of
     Halt             -> return Halt
     Call    a b Nothing    -> do { b <- mapM ref b;              return $ Call a b Nothing }
@@ -196,7 +198,7 @@ alphaConvert procs = fst $ runId $ runStateT (0, undefined) $ mapM proc procs
     Assume  a b      -> do { a <- ref a; b <- cont b; return $ Assume a b }
     Let     a b c    -> do { b <- value b; a <- newVar a; c <- cont c; return $ Let a b c }
       where
-      value :: Value i -> Alpha (Value i)
+      value :: Value -> Alpha Value
       value a = case a of
         Var       a   -> do { a <- ref a; return $ Var a }
         Literal   a   -> do { return $ Literal a }
@@ -204,10 +206,10 @@ alphaConvert procs = fst $ runId $ runStateT (0, undefined) $ mapM proc procs
         Intrinsic i a -> do { a <- mapM ref a; return $ Intrinsic i a }
 
 -- | Convert a procedure to make explicit use of the stack to save and restore variables across procedure calls.
-explicitStack :: Proc i -> Proc i
+explicitStack :: Proc -> Proc
 explicitStack (Proc name args body) = Proc name args $ cont body
   where
-  cont :: Cont i -> Cont i
+  cont :: Cont -> Cont
   cont a = case a of
     Call a b (Just c) -> f1 freeVars
       where
@@ -228,7 +230,7 @@ explicitStack (Proc name args body) = Proc name args $ cont body
     Let     a b c       -> Let a b $ cont c
 
 -- | Replace a continuation given a pattern to match.
-replaceCont :: (Cont i -> Maybe (Cont i)) -> Cont i -> Cont i
+replaceCont :: (Cont -> Maybe Cont) -> Cont -> Cont
 replaceCont replacement a = case replacement a of
   Just a  -> a
   Nothing -> case a of

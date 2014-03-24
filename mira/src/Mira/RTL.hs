@@ -33,12 +33,13 @@ import MonadLib hiding (Label, jump)
 import Text.Printf
 
 import Mira.CPS (Literal)
+import Mira.Intrinsics
 
 type Var   = String
 type Label = String
-data Program i = Program [Instruction i]
+data Program = Program [Instruction]
 
-data Instruction i
+data Instruction
   = Comment   String       -- ^ A comment.
   | Label     Label        -- ^ Label a section of code.
   | Return                 -- ^ Pop label off of call stack and jump to address.
@@ -51,12 +52,12 @@ data Instruction i
   | PushCont  Label        -- ^ Push onto the call stack a label and the number words pushed onto the data stack.
   | Pop       Var          -- ^ Pop a value off the stack.
   | Const     Literal Var  -- ^ Load a literal into a var.
-  | Intrinsic i [Var] Var  -- ^ Call an intrinsic and assign result to var.
+  | Intrinsic Intrinsic [Var] Var  -- ^ Call an intrinsic and assign result to var.
 
-instance Show i => Show (Program i) where
+instance Show Program where
   show (Program p) = unlines $ map show p
 
-instance Show i => Show (Instruction i) where
+instance Show Instruction where
   show a = case a of
     Comment   a     -> printf "\t# %s" a
     Label     a     -> printf "%s:" a
@@ -73,10 +74,10 @@ instance Show i => Show (Instruction i) where
     Intrinsic i a b -> printf "\tintrinsic (%s) (%s) %s" (show i) (intercalate ", " a) b
 
 -- | All the variables in a program.
-variables :: Program i -> [Var]
+variables :: Program -> [Var]
 variables (Program p) = nub $ concatMap f p
   where
-  f :: Instruction i -> [Var]
+  f :: Instruction -> [Var]
   f a = case a of
     Comment   _     -> []
     Label     _     -> []
@@ -93,78 +94,78 @@ variables (Program p) = nub $ concatMap f p
     Intrinsic _ a b -> a ++ [b]
 
 -- | The address of all labels in a program.
-labels :: Program i -> [(Label, Int)]
+labels :: Program -> [(Label, Int)]
 labels (Program p) = [ (a, addr) | (Label a, addr) <- zip p [0 ..] ]
 
 
-type RTL a i = StateT (Int, a, Program i) Id
+type RTL a = StateT (Int, a, Program) Id
 
 -- | Elaborates an RTL description to a Program.
-elaborate :: a -> RTL a i () -> (a, Program i)
+elaborate :: a -> RTL a () -> (a, Program)
 elaborate a p = (a', b)
   where
   ((), (_, a', b)) = runId $ runStateT (0, a, Program []) p 
 
 -- | Get the meta data.
-getMeta :: RTL a i a
+getMeta :: RTL a a
 getMeta = do
   (_, a, _) <- get
   return a
 
 -- | Set the meta data.
-setMeta :: a -> RTL a i ()
+setMeta :: a -> RTL a ()
 setMeta a = do
   (i, _, p) <- get
   set (i, a, p)
 
 -- | Generate a variable.
-genVar :: RTL a i String
+genVar :: RTL a String
 genVar = do
   (i, a, p) <- get
   set (i + 1, a, p)
   return $ "_rtl_" ++ show i
 
-instr :: Instruction i -> RTL a i ()
+instr :: Instruction -> RTL a ()
 instr instr = do
   (i, a, Program p) <- get
   set (i, a, Program $ p ++ [instr])
 
-comment :: String -> RTL a i ()
+comment :: String -> RTL a ()
 comment = instr . Comment
 
-label :: Label -> RTL a i ()
+label :: Label -> RTL a ()
 label = instr . Label
 
-return' :: RTL a i ()
+return' :: RTL a ()
 return' = instr Return
 
-jump :: Label -> RTL a i ()
+jump :: Label -> RTL a ()
 jump = instr . Jump
 
-branch :: Var -> Label -> RTL a i ()
+branch :: Var -> Label -> RTL a ()
 branch a b = instr $ Branch a b
 
-fail' :: RTL a i ()
+fail' :: RTL a ()
 fail' = instr Fail
 
-halt :: RTL a i ()
+halt :: RTL a ()
 halt = instr Halt
 
-copy :: Var -> Var -> RTL a i ()
+copy :: Var -> Var -> RTL a ()
 copy a b = instr $ Copy a b
 
-push :: Var -> RTL a i ()
+push :: Var -> RTL a ()
 push = instr . Push
 
-pushCont :: Label -> RTL a i ()
+pushCont :: Label -> RTL a ()
 pushCont a = instr $ PushCont a
 
-pop :: Var -> RTL a i ()
+pop :: Var -> RTL a ()
 pop = instr . Pop
 
-const' :: Literal -> Var -> RTL a i ()
+const' :: Literal -> Var -> RTL a ()
 const' a b = instr $ Const a b
 
-intrinsic :: i -> [Var] -> Var -> RTL a i ()
+intrinsic :: Intrinsic -> [Var] -> Var -> RTL a ()
 intrinsic a b c = instr $ Intrinsic a b c
 
