@@ -100,6 +100,7 @@ Running the above example produces the following files:
 - factorial-cps.lisp
 - factorial-rtl.lisp
 
+TODO
 
 
 # Known Bugs and Limitations
@@ -108,4 +109,5 @@ Running the above example produces the following files:
   - Mutable state.
   - Structures.
   - Pointer operations.
+  - Post condition checks.
 
