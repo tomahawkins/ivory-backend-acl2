@@ -102,10 +102,17 @@ Running the above example produces the following files:
 
 TODO
 
+# Ivory Language Coverage Status
+
+| Feature | Implemented | Testcase | Translation Strategy |
+| ------- | ----------- | -------- | -------------------- |
+| a       | b           | c        | d                    |
+
+
 
 # Known Bugs and Limitations
 
-- Unsupported Ivory features:
+- Unsupported Ivory language features:
   - Mutable state.
   - Structures.
   - Pointer operations.
