@@ -177,7 +177,7 @@ ExpGt     | ```>, >=   ``` | X
 ExpLt     | ```<, <=   ``` | X
 ExpNot    | ```!       ``` | X
 ExpAnd    | ```&&      ``` | X
-ExpOr     | ```||      ``` | X
+ExpOr     |                | X
 ExpMul    | ```*       ``` | X
 ExpMod    | ```%       ``` | X
 ExpAdd    | ```+       ``` | X
