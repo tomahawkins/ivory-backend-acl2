@@ -99,7 +99,7 @@ of the Ivory to ACL2 compiler flow:
 
   The first step in the translation converts the
   [Ivory AST](https://github.com/GaloisInc/ivory/blob/master/ivory/src/Ivory/Language/Syntax/AST.hs)
-  to a smaller, simpilar form called
+  to a smaller, simpler form called
   [CLL](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/CLL.hs).
   This smaller language provides top level function definitions
   and Call, If, Return, Assert, Let, and Loop statements
@@ -109,7 +109,7 @@ of the Ivory to ACL2 compiler flow:
 
   From CLL we then translate into a continuation passing style
   ([CPS](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/CPS.hs))
-  form.  In CPS expression evaulation order is made explict
+  form.  In CPS expression evaluation order is made explicit
   and all function calls become tail-calls.
   This CPS IR provides the following continuation types:  Halt, Call, Return, Let, If, and Assert.
   In addition, this IR also provides for explicit stack operations (Push, Pop).
@@ -130,7 +130,7 @@ of the Ivory to ACL2 compiler flow:
 1. __factorial.rtl__
 
   The ACL2 backend of Ivory also has the ability to compile down to a
-  lower form to prove arbitrary asserions of Ivory programs.  This
+  lower form to prove arbitrary assertions of Ivory programs.  This
   form, called [RTL](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/RTL.hs),
   is an stack machine, and provides Branch, Jump, Push, Pop, and other
   assembly-like instructions.
@@ -144,7 +144,9 @@ of the Ivory to ACL2 compiler flow:
   attempts to prove that all Fail instructions in a program are
   unreachable.
 
-# Ivory Language Coverage Status
+# Ivory Language Coverage
+
+The follow tables list Ivory features supported by the ACL2 backend.
 
 ## Ivory Statements
 
