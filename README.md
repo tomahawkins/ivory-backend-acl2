@@ -177,12 +177,12 @@ ExpGt     | ```>, >=   ``` | X
 ExpLt     | ```<, <=   ``` | X
 ExpNot    | ```!       ``` | X
 ExpAnd    | ```&&      ``` | X
-ExpOr     |                | X
+ExpOr     | ```||      ``` | X
 ExpMul    | ```*       ``` | X
 ExpMod    | ```%       ``` | X
 ExpAdd    | ```+       ``` | X
 ExpSub    | ```-       ``` | X
-ExpNegate | ```- (uni) ``` | X
+ExpNegate | ```-a      ``` | X
 ExpAbs    | ```abs()   ``` | X
 ExpSignum | ```signum()``` | X
 
