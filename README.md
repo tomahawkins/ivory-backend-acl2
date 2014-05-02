@@ -146,10 +146,10 @@ of the Ivory to ACL2 compiler flow:
 
 # Ivory Language Coverage Status
 
-## Ivory statements
+## Ivory Statements
 
-| Name | Description | Implemented | Testcase |
-| - | - | - | - | - |
+| Name           | Description                                         | Implemented | Testcase |
+| -------------- | --------------------------------------------------- | - | --------- |
 | IfTE           | If-then-else.                                       | X | Factorial |
 | Return         | Return from a function call with an optional value. | X | Factorial |
 | Assert         | User assertions.                                    |   |           |
