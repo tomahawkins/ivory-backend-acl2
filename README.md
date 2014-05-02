@@ -169,7 +169,7 @@ Store          | A store operation to a variable or an array.        |   |
 ## Ivory Expressions
 
 Name      | C Equiv        | Implemented
-----------|----------------|--
+----------|----------------|------------
 ExpEq     | ```==      ``` | X
 ExpNeq    | ```!=      ``` | X
 
