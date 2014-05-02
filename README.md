@@ -148,21 +148,21 @@ of the Ivory to ACL2 compiler flow:
 
 ## Ivory Statements
 
-| Name           | Description                                         | Implemented | Testcase |
-| -------------- | --------------------------------------------------- | - | --------- |
-| IfTE           | If-then-else.                                       | X | Factorial |
-| Return         | Return from a function call with an optional value. | X | Factorial |
-| Assert         | User assertions.                                    |   |           |
-| Assume         | User assumptions.                                   |   |           |
-| CompilerAssert | Compiler generated assertions.                      |   |           |
-| Local          | Local variable introduction.                        | X | Factorial |
-| Assign         | Variable assignment.                                |   |           |
-| AllocRef       | Allocation reference.                               |   |           |
-| Defef          | Pointer dereference.                                |   |           |
-| Store          | Storing to a pointer or array.                      |   |           |
-| Call           | Function calls.                                     | X | Factorial |
-| RefCopy        |                                                     |   |           |
-| Forever        | A forever loop.                                     |   |           |
-| Break          | A break statement for a loop.                       |   |           |
-| Store          | A store operation to a variable or an array.        |   |           |
+Name           | Description                               | Implemented | Testcase
+---------------|-----------------------------------------------------|---|----------
+IfTE           | If-then-else.                                       | X | Factorial
+Return         | Return from a function call with an optional value. | X | Factorial
+Assert         | User assertions.                                    |   |          
+Assume         | User assumptions.                                   |   |          
+CompilerAssert | Compiler generated assertions.                      |   |          
+Local          | Local variable introduction.                        | X | Factorial
+Assign         | Variable assignment.                                |   |          
+AllocRef       | Allocation reference.                               |   |          
+Defef          | Pointer dereference.                                |   |          
+Store          | Storing to a pointer or array.                      |   |          
+Call           | Function calls.                                     | X | Factorial
+RefCopy        |                                                     |   |          
+Forever        | A forever loop.                                     |   |          
+Break          | A break statement for a loop.                       |   |          
+Store          | A store operation to a variable or an array.        |   |          
 
