@@ -146,18 +146,21 @@ of the Ivory to ACL2 compiler flow:
 
 # Ivory Language Coverage Status
 
-Ivory statements:
+## Ivory statements
 
-| Name | Decription | Implemented | Testcase | Translation Strategy |
-| -- | -- | -- | -- | -- |
-| IfTE | If-then-else | X | Factorial    | Translated into condition (branching) CPS form. |
-| Return | Return from a function call with an optional value. | X | Factorial | Translated to a CPS return.  Ignores continuation. |
-| Assert, CompilerAssert, Assume | User and compiler generated assertions. | | | Translated to CPS assertion, but not in ACL2. |
-| Local | Local variable introduction. | X | Factorial | Translated to a let expression. |
-| Assign   | Variable assignment.           | | | |
-| AllocRef | Allocation reference.          | | | |
-| Defef    | Pointer dereference.           | | | |
-| Store    | Storing to a pointer or array. | | | |
-| Call     | Function calls. | X | Factorial | Translated to CPS calls.  Stack operations to save and restore variables are made explicit. |
-
+| Name | Decription | Implemented | Testcase |
+|-|-|-|-|-|
+| IfTE | If-then-else | X | Factorial    |
+| Return | Return from a function call with an optional value. | X | Factorial |
+| Assert, CompilerAssert, Assume | User and compiler generated assertions. | | |
+| Local | Local variable introduction. | X | Factorial |
+| Assign   | Variable assignment.           | | |
+| AllocRef | Allocation reference.          | | |
+| Defef    | Pointer dereference.           | | |
+| Store    | Storing to a pointer or array. | | |
+| Call     | Function calls. | X | Factorial |
+| RefCopy | | | |
+| Forever | A forever loop. | | |
+| Break | A break statement for a loop. | | |
+| Store | A store operation to a variable or an array. | | |
 
