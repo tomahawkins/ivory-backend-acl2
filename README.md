@@ -166,3 +166,24 @@ Forever        | A forever loop.                                     |   |
 Break          | A break statement for a loop.                       |   |          
 Store          | A store operation to a variable or an array.        |   |          
 
+## Ivory Expressions
+
+Name      | C Equiv        | Implemented
+----------|----------------|--
+ExpEq     | ```==      ``` | X
+ExpNeq    | ```!=      ``` | X
+ExpCond   | ```?:      ``` | X
+ExpGt     | ```>, >=   ``` | X
+ExpLt     | ```<, <=   ``` | X
+ExpNot    | ```!       ``` | X
+ExpAnd    | ```&&      ``` | X
+ExpOr     | ```||      ``` | X
+ExpMul    | ```*       ``` | X
+ExpMod    | ```%       ``` | X
+ExpAdd    | ```+       ``` | X
+ExpSub    | ```-       ``` | X
+ExpNegate | ```- (uni) ``` | X
+ExpAbs    | ```abs()   ``` | X
+ExpSignum | ```signum()``` | X
+
+
