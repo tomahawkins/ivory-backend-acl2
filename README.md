@@ -168,22 +168,54 @@ Store          | A store operation to a variable or an array.        |   |
 
 ## Ivory Expressions
 
-Name      | C Equiv        | Implemented
-----------|----------------|------------
-ExpEq     | ```==      ``` | X
-ExpNeq    | ```!=      ``` | X
-ExpCond   | ```?:      ``` | X
-ExpGt     | ```>, >=   ``` | X
-ExpLt     | ```<, <=   ``` | X
-ExpNot    | ```!       ``` | X
-ExpAnd    | ```&&      ``` | X
-ExpOr     | ```\|\|    ``` | X
-ExpMul    | ```*       ``` | X
-ExpMod    | ```%       ``` | X
-ExpAdd    | ```+       ``` | X
-ExpSub    | ```-       ``` | X
-ExpNegate | ```-a      ``` | X
-ExpAbs    | ```abs()   ``` | X
-ExpSignum | ```signum()``` | X
+Name              | C Equiv        | Implemented
+------------------|----------------|------------
+ExpEq             | ```==      ``` | X
+ExpNeq            | ```!=      ``` | X
+ExpCond           | ```?:      ``` | X
+ExpGt             | ```>, >=   ``` | X
+ExpLt             | ```<, <=   ``` | X
+ExpNot            | ```!       ``` | X
+ExpAnd            | ```&&      ``` | X
+ExpOr             |                | X
+ExpMul            | ```*       ``` | X
+ExpMod            | ```%       ``` | X
+ExpAdd            | ```+       ``` | X
+ExpSub            | ```-       ``` | X
+ExpNegate         | ```-a      ``` | X
+ExpAbs            | ```abs()   ``` | X
+ExpSignum         | ```signum()``` | X
+ExpDiv            |                |
+ExpRecip          |                |
+ExpFExp           |                |
+ExpFSqrt          |                |
+ExpFLog           |                |
+ExpFPow           |                |
+ExpFLogBase       |                |
+ExpFSin           |                |
+ExpFTan           |                |
+ExpFCos           |                |
+ExpFAsin          |                |
+ExpFAtan          |                |
+ExpFAcos          |                |
+ExpFSinh          |                |
+ExpFTanh          |                |
+ExpFCosh          |                |
+ExpFAsinh         |                |
+ExpFAtanh         |                |
+ExpFAcosh         |                |
+ExpIsNan          |                |
+ExpIsInf          |                |
+ExpRoundF         |                |
+ExpCeilF          |                |
+ExpFloorF         |                |
+ExpToFloat        |                |
+ExpFromFloat      |                |
+ExpBitAnd         |                |
+ExpBitOr          |                |
+ExpBitXor         |                |
+ExpBitComplement  |                |
+ExpBitShiftL      |                |
+ExpBitShiftR      |                |
 
 
