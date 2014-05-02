@@ -91,30 +91,73 @@ This time the verification returns a `FAIL`.
 
 ## A Closer Look at the Compilation Process
 
-Running the above example produces the following files:
+Running the above example produces the following files,
+which are the various intermediate representations (IRs)
+of the Ivory to ACL2 compiler flow:
 
-- factorial.cll
-- factorial.cps1
-- factorial.cps2
-- factorial.rtl
-- factorial-cps.lisp
-- factorial-rtl.lisp
+1. __factorial.cll__
 
-TODO
+  The first step in the translation converts the
+  [Ivory AST](https://github.com/GaloisInc/ivory/blob/master/ivory/src/Ivory/Language/Syntax/AST.hs)
+  to a smaller, simpilar form called
+  [CLL](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/CLL.hs).
+  This smaller language provides top level function definitions
+  and Call, If, Return, Assert, Let, and Loop statements
+  along with a host of [Expressions](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/Expr.hs).
+
+1. __factorial.cps1__
+
+  From CLL we then translate into a continuation passing style
+  ([CPS](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/CPS.hs))
+  form.  In CPS expression evaulation order is made explict
+  and all function calls become tail-calls.
+  This CPS IR provides the following continuation types:  Halt, Call, Return, Let, If, and Assert.
+  In addition, this IR also provides for explicit stack operations (Push, Pop).
+
+1. __factorial.cps2__
+
+  This translation stays within CPS, but makes stack operations
+  explicit (Push, Pop) to save and restore variables across function calls.
+  
+1. __factorial-cps.lisp__
+
+  At this point, the CPS form with explicit stack operations is converted
+  into ACL2.  All continuations in the program are given a name and
+  a single, recursive ACL2 function pull a continuation name off the stack
+  and executes it.  The stack and a data structure capturing global state
+  is threaded through all the ACL2 functions as arguments.
+
+1. __factorial.rtl__
+
+  The ACL2 backend of Ivory also has the ability to compile down to a
+  lower form to prove arbitrary asserions of Ivory programs.  This
+  form, called [RTL](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/RTL.hs),
+  is an stack machine, and provides Branch, Jump, Push, Pop, and other
+  assembly-like instructions.
+
+1. __factorial-rtl.lisp__
+
+  From RTL, the compiler generates ACL2 that provides both a machine
+  model for the instructions of RTL, and the program compiled to run 
+  on this machine.  Ivory assertions are captured as conditional
+  branches around Fail instructions.  The ACL2 theorem prover
+  attempts to prove that all Fail instructions in a program are
+  unreachable.
 
 # Ivory Language Coverage Status
 
-| Feature | Implemented | Testcase | Translation Strategy |
-| ------- | ----------- | -------- | -------------------- |
-| a       | b           | c        | d                    |
+Ivory statements:
 
+| Name | Decription | Implemented | Testcase | Translation Strategy |
+| -- | -- | -- | -- | -- |
+| IfTE | If-then-else | X | Factorial    | Translated into condition (branching) CPS form. |
+| Return | Return from a function call with an optional value. | X | Factorial | Translated to a CPS return.  Ignores continuation. |
+| Assert, CompilerAssert, Assume | User and compiler generated assertions. | | | Translated to CPS assertion, but not in ACL2. |
+| Local | Local variable introduction. | X | Factorial | Translated to a let expression. |
+| Assign   | Variable assignment.           | | | |
+| AllocRef | Allocation reference.          | | | |
+| Defef    | Pointer dereference.           | | | |
+| Store    | Storing to a pointer or array. | | | |
+| Call     | Function calls. | X | Factorial | Translated to CPS calls.  Stack operations to save and restore variables are made explicit. |
 
-
-# Known Bugs and Limitations
-
-- Unsupported Ivory language features:
-  - Mutable state.
-  - Structures.
-  - Pointer operations.
-  - Post condition checks.
 

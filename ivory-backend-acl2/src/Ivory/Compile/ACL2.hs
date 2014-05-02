@@ -109,7 +109,7 @@ cllStmt a = case a of
   I.Assign   _ a b -> C.Let (var a) $ cllExpr b
   I.AllocRef _ a b -> C.Let (var a) $ C.Var $ var b
   I.Deref    _ a b -> C.Let (var a) $ cllExpr b
-  I.Store    _ (I.ExpVar a) b -> C.Let (var a) $ cllExpr b
+  --I.Store    _ (I.ExpVar a) b -> C.Let (var a) $ cllExpr b
 
   I.Call   _ Nothing  fun args  -> C.Call Nothing        (var fun) $ map (cllExpr . tValue) args
   I.Call   _ (Just r) fun args  -> C.Call (Just $ var r) (var fun) $ map (cllExpr . tValue) args
@@ -118,7 +118,12 @@ cllStmt a = case a of
     (incr, to) = case incr' of
       I.IncrTo a -> (True, a)
       I.DecrTo a -> (False, a)
-  a -> error $ "Unsupported Ivory statement: " ++ show a
+
+  I.RefCopy _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
+  I.Forever _     -> error $ "Unsupported Ivory statement: " ++ show a
+  I.Break         -> error $ "Unsupported Ivory statement: " ++ show a
+  I.Comment _     -> error $ "Unsupported Ivory statement: " ++ show a
+  I.Store   _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
 
 cllExpr :: I.Expr -> C.Expr
 cllExpr a = case a of
