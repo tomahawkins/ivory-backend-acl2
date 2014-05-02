@@ -152,19 +152,18 @@ Name           | Description                               | Implemented | Testc
 ---------------|-----------------------------------------------------|---|----------
 IfTE           | If-then-else.                                       | X | Factorial
 Return         | Return from a function call with an optional value. | X | Factorial
-Assert         | User assertions.                                    |   |          
-Assume         | User assumptions.                                   |   |          
-CompilerAssert | Compiler generated assertions.                      |   |          
+Assert         | User assertions.                                    | X |          
+Assume         | User assumptions.                                   | X |          
+CompilerAssert | Compiler generated assertions.                      | X |          
 Local          | Local variable introduction.                        | X | Factorial
+Call           | Function calls.                                     | X | Factorial
 Assign         | Variable assignment.                                |   |          
 AllocRef       | Allocation reference.                               |   |          
 Defef          | Pointer dereference.                                |   |          
-Store          | Storing to a pointer or array.                      |   |          
-Call           | Function calls.                                     | X | Factorial
-RefCopy        |                                                     |   |          
 Forever        | A forever loop.                                     |   |          
 Break          | A break statement for a loop.                       |   |          
 Store          | A store operation to a variable or an array.        |   |          
+RefCopy        |                                                     |   |          
 
 ## Ivory Expressions
 
