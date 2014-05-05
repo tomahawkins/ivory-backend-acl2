@@ -150,73 +150,88 @@ The follow tables list Ivory features supported by the ACL2 backend.
 
 ## Ivory Statements
 
-Name           | Description                               | Implemented | Testcase
----------------|-----------------------------------------------------|---|----------
-IfTE           | If-then-else.                                       | X | Factorial
-Return         | Return from a function call with an optional value. | X | Factorial
-Assert         | User assertions.                                    | X |          
-Assume         | User assumptions.                                   | X |          
-CompilerAssert | Compiler generated assertions.                      | X |          
-Local          | Local variable introduction.                        | X | Factorial
-Call           | Function calls.                                     | X | Factorial
-Assign         | Variable assignment.                                |   |          
-AllocRef       | Allocation reference.                               |   |          
-Defef          | Pointer dereference.                                |   |          
-Forever        | A forever loop.                                     |   |          
-Break          | A break statement for a loop.                       |   |          
-Store          | A store operation to a variable or an array.        |   |          
-RefCopy        |                                                     |   |          
+Name           | Description                                         | Implemented | Testcase
+---------------|-----------------------------------------------------|-------------|----------
+IfTE           | If-then-else.                                       | X           | Factorial
+Return         | Return from a function call with an optional value. | X           | Factorial
+Assert         | User assertions.                                    | X           |          
+Assume         | User assumptions.                                   | X           |          
+CompilerAssert | Compiler generated assertions.                      | X           |          
+Local          | Local variable introduction.                        | X           | Factorial
+Call           | Function calls.                                     | X           | Factorial
+Assign         | Variable assignment.                                |             |          
+AllocRef       | Allocation reference.                               |             |          
+Defef          | Pointer dereference.                                |             |          
+Forever        | A forever loop.                                     |             |          
+Break          | A break statement for a loop.                       |             |          
+Store          | A store operation to a variable or an array.        |             |          
+RefCopy        |                                                     |             |          
 
 ## Ivory Expressions
 
-Name              | C Equiv        | Implemented
-------------------|----------------|------------
-ExpEq             | ```==      ``` | X
-ExpNeq            | ```!=      ``` | X
-ExpCond           | ```?:      ``` | X
-ExpGt             | ```>, >=   ``` | X
-ExpLt             | ```<, <=   ``` | X
-ExpNot            | ```!       ``` | X
-ExpAnd            | ```&&      ``` | X
-ExpOr             |                | X
-ExpMul            | ```*       ``` | X
-ExpMod            | ```%       ``` | X
-ExpAdd            | ```+       ``` | X
-ExpSub            | ```-       ``` | X
-ExpNegate         | ```-a      ``` | X
-ExpAbs            | ```abs()   ``` | X
-ExpSignum         | ```signum()``` | X
-ExpDiv            |                |
-ExpRecip          |                |
-ExpFExp           |                |
-ExpFSqrt          |                |
-ExpFLog           |                |
-ExpFPow           |                |
-ExpFLogBase       |                |
-ExpFSin           |                |
-ExpFTan           |                |
-ExpFCos           |                |
-ExpFAsin          |                |
-ExpFAtan          |                |
-ExpFAcos          |                |
-ExpFSinh          |                |
-ExpFTanh          |                |
-ExpFCosh          |                |
-ExpFAsinh         |                |
-ExpFAtanh         |                |
-ExpFAcosh         |                |
-ExpIsNan          |                |
-ExpIsInf          |                |
-ExpRoundF         |                |
-ExpCeilF          |                |
-ExpFloorF         |                |
-ExpToFloat        |                |
-ExpFromFloat      |                |
-ExpBitAnd         |                |
-ExpBitOr          |                |
-ExpBitXor         |                |
-ExpBitComplement  |                |
-ExpBitShiftL      |                |
-ExpBitShiftR      |                |
+Name            | Description                                         | Implemented | Testcase
+----------------|-----------------------------------------------------|-------------|----------
+ExpSym          | Symbols.                                            | X           | Factorial
+ExpVar          | Variables.                                          | X           | Factorial
+ExpLiteral      | Liternal constants.                                 | X           | Factorial
+ExpLabel        | Structure label indexing.                           |             |
+ExpIndex        | Array indexing.                                     |             |
+ExpToIx         | Casting and expression to an index.                 |             |
+ExpExpOp        | Intrinsics (operators).                             | X           |
+ExpAddrOfGlobal | Get the addressof a global memory area.             |             |
+ExpMaxMin       | True is max value for type, false in min value.     |             |
+
+
+## Ivory Intrinsics (Operators)
+
+Name              | Implemented | Testcase
+------------------|-------------|---------
+ExpEq             | X           |
+ExpNeq            | X           |
+ExpCond           | X           |
+ExpGt             | X           |
+ExpLt             | X           |
+ExpNot            | X           |
+ExpAnd            | X           |
+ExpOr             | X           |
+ExpMul            | X           |
+ExpMod            | X           |
+ExpAdd            | X           |
+ExpSub            | X           |
+ExpNegate         | X           |
+ExpAbs            | X           |
+ExpSignum         | X           |
+ExpDiv            |             |
+ExpRecip          |             |
+ExpFExp           |             |
+ExpFSqrt          |             |
+ExpFLog           |             |
+ExpFPow           |             |
+ExpFLogBase       |             |
+ExpFSin           |             |
+ExpFTan           |             |
+ExpFCos           |             |
+ExpFAsin          |             |
+ExpFAtan          |             |
+ExpFAcos          |             |
+ExpFSinh          |             |
+ExpFTanh          |             |
+ExpFCosh          |             |
+ExpFAsinh         |             |
+ExpFAtanh         |             |
+ExpFAcosh         |             |
+ExpIsNan          |             |
+ExpIsInf          |             |
+ExpRoundF         |             |
+ExpCeilF          |             |
+ExpFloorF         |             |
+ExpToFloat        |             |
+ExpFromFloat      |             |
+ExpBitAnd         |             |
+ExpBitOr          |             |
+ExpBitXor         |             |
+ExpBitComplement  |             |
+ExpBitShiftL      |             |
+ExpBitShiftR      |             |
 
 
