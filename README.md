@@ -169,20 +169,19 @@ RefCopy        |                                                     |          
 
 ## Ivory Expressions
 
-Name            | Description                                         | Implemented | Testcase
-----------------|-----------------------------------------------------|-------------|----------
-ExpSym          | Symbols.                                            | X           | Factorial
-ExpVar          | Variables.                                          | X           | Factorial
-ExpLiteral      | Liternal constants.                                 | X           | Factorial
-ExpLabel        | Structure label indexing.                           |             |
-ExpIndex        | Array indexing.                                     |             |
-ExpToIx         | Casting and expression to an index.                 |             |
-ExpExpOp        | Intrinsics (operators).                             | X           |
-ExpAddrOfGlobal | Get the addressof a global memory area.             |             |
-ExpMaxMin       | True is max value for type, false in min value.     |             |
+Name            | Description                                     | Implemented | Testcase
+----------------|-------------------------------------------------|-------------|----------
+ExpSym          | Symbols.                                        | X           | Factorial
+ExpVar          | Variables.                                      | X           | Factorial
+ExpLiteral      | Liternal constants.                             | X           | Factorial
+ExpLabel        | Structure label indexing.                       |             |
+ExpIndex        | Array indexing.                                 |             |
+ExpToIx         | Casting and expression to an index.             |             |
+ExpExpOp        | Intrinsic (operator) application.               | X           |
+ExpAddrOfGlobal | Get the addressof a global memory area.         |             |
+ExpMaxMin       | True is max value for type, false in min value. |             |
 
-
-## Ivory Intrinsics (Operators)
+## Ivory Intrinsics
 
 Name              | Implemented | Testcase
 ------------------|-------------|---------
