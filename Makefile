@@ -1,22 +1,16 @@
 .PHONY: all
-all: verify
+all: install
 
-.PHONY: verify
-verify: Factorial.hs ivory-backend-acl2
-	runhaskell -W Factorial.hs
+.PHONY: test
+test: Testcases.hs install
+	runhaskell -W Testcases.hs
+
+.PHONY: install
+install: ivory-backend-acl2
 
 .PHONY: loop
 loop: Loop.hs ivory-backend-acl2
 	runhaskell -W Loop.hs
-
-test.log: test.lisp
-	acl2 < test.lisp | tee test.log
-
-factorial.log: factorial.lisp
-	acl2 < factorial.lisp | tee factorial.log
-
-test.lisp: Tests.hs ivory-backend-acl2
-	runhaskell -W Tests.hs
 
 .PHONY: ivory-backend-acl2
 ivory-backend-acl2: ivory-backend-acl2/dist/setup-config

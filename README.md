@@ -152,13 +152,14 @@ The follow tables list Ivory features supported by the ACL2 backend.
 
 Name           | Description                                         | Implemented | Testcase
 ---------------|-----------------------------------------------------|-------------|----------
-IfTE           | If-then-else.                                       | X           | Factorial
-Return         | Return from a function call with an optional value. | X           | Factorial
-Assert         | User assertions.                                    | X           |          
+IfTE           | If-then-else.                                       | X           | factorialTests
+Return         | Return from a function call with an optional value. | X           | factorialTests
+Assert         | User assertions.                                    | X           | basicTests
 Assume         | User assumptions.                                   | X           |          
 CompilerAssert | Compiler generated assertions.                      | X           |          
-Local          | Local variable introduction.                        | X           | Factorial
-Call           | Function calls.                                     | X           | Factorial
+Local          | Local variable introduction.                        | X           | factorialTests
+Call           | Function calls.                                     | X           | factorialTests
+Loop           | A loop over a fixed iteration.                      | X           | loopTest
 Assign         | Variable assignment.                                |             |          
 AllocRef       | Allocation reference.                               |             |          
 Defef          | Pointer dereference.                                |             |          
@@ -171,13 +172,13 @@ RefCopy        |                                                     |          
 
 Name            | Description                                     | Implemented | Testcase
 ----------------|-------------------------------------------------|-------------|----------
-ExpSym          | Symbols.                                        | X           | Factorial
-ExpVar          | Variables.                                      | X           | Factorial
-ExpLiteral      | Liternal constants.                             | X           | Factorial
+ExpSym          | Symbols.                                        | X           | basicTests
+ExpVar          | Variables.                                      | X           | basicTests
+ExpLiteral      | Liternal constants.                             | X           | basicTests
+ExpExpOp        | Intrinsic (operator) application.               | X           | basicTests
+ExpIndex        | Array indexing.                                 |             | 
 ExpLabel        | Structure label indexing.                       |             |
-ExpIndex        | Array indexing.                                 |             |
 ExpToIx         | Casting and expression to an index.             |             |
-ExpExpOp        | Intrinsic (operator) application.               | X           |
 ExpAddrOfGlobal | Get the addressof a global memory area.         |             |
 ExpMaxMin       | True is max value for type, false in min value. |             |
 
@@ -185,18 +186,18 @@ ExpMaxMin       | True is max value for type, false in min value. |             
 
 Name              | Implemented | Testcase
 ------------------|-------------|---------
-ExpEq             | X           |
-ExpNeq            | X           |
-ExpCond           | X           |
-ExpGt             | X           |
-ExpLt             | X           |
-ExpNot            | X           |
-ExpAnd            | X           |
-ExpOr             | X           |
-ExpMul            | X           |
+ExpEq             | X           | basicTests
+ExpNeq            | X           | basicTests
+ExpCond           | X           | basicTests
+ExpGt             | X           | basicTests
+ExpLt             | X           | basicTests
+ExpNot            | X           | basicTests
+ExpAnd            | X           | basicTests
+ExpOr             | X           | basicTests
+ExpMul            | X           | factorialTests
 ExpMod            | X           |
-ExpAdd            | X           |
-ExpSub            | X           |
+ExpAdd            | X           | basicTests
+ExpSub            | X           | basicTests
 ExpNegate         | X           |
 ExpAbs            | X           |
 ExpSignum         | X           |
