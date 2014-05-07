@@ -50,6 +50,7 @@ cpsStmts a cont = case a of
       C.Assert a -> cpsExpr a $ \ a -> return $ Assert a cont
       C.Assume a -> cpsExpr a $ \ a -> return $ Assume a cont
       C.Let    a b -> cpsExpr b $ \ b -> return $ Let a (Var b) cont
+      C.Store  a b -> cpsExpr b $ \ b -> return $ Store a (Var b) cont
       C.Call Nothing fun args -> f [] args
         where
         --f :: [Var] -> [C.Expr i] -> CPS i (Cont i)

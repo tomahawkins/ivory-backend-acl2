@@ -72,6 +72,7 @@ cont a = case a of
       C.Pop              -> pop a
       C.Intrinsic i args -> intrinsic i args a
     cont c
+  Store a b c -> cont $ Let a b c  --XXX Probably not correct.
 
   If a b c -> do
     onTrue <- genVar

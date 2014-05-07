@@ -91,9 +91,9 @@ loopTest = proc "someLoopFunc" $ \ix ->
    ret =<< deref ref
 
 -- A termination test of infinite recursion.
-infiniteLoopTest :: Def ('[] :-> Uint32)
-infiniteLoopTest = proc "callForever" $ body $ do
-  call infiniteLoopTest
+infiniteRecursionTest :: Def ('[] :-> Uint32)
+infiniteRecursionTest = proc "callForever" $ body $ do
+  call infiniteRecursionTest
   ret 0
 
 
@@ -156,8 +156,8 @@ main = do
     then putStrLn "Tests passed."
     else putStrLn "Tests failed."
   putStrLn "Termination tests:"
-  pass <- verifyTermination $ package "loop" $ incl loopTest
+  pass <- verifyTermination $ package "loopTest" $ incl loopTest
   putStrLn (if pass then "pass" else "FAIL")
-  pass <- verifyTermination $ package "callForever" $ incl infiniteLoopTest
+  pass <- verifyTermination $ package "infiniteRecursionTest" $ incl infiniteRecursionTest
   putStrLn (if not pass then "pass" else "FAIL")
 

@@ -165,7 +165,7 @@ AllocRef       | Allocation reference.                               |          
 Defef          | Pointer dereference.                                |             |          
 Forever        | A forever loop.                                     |             |          
 Break          | A break statement for a loop.                       |             |          
-Store          | A store operation to a variable or an array.        |             |          
+Store          | A store operation to a variable or an array.        |             | loopTest
 RefCopy        |                                                     |             |          
 
 ## Ivory Expressions

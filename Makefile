@@ -1,5 +1,5 @@
 .PHONY: all
-all: install
+all: test
 
 .PHONY: test
 test: Testcases.hs install
@@ -8,13 +8,9 @@ test: Testcases.hs install
 .PHONY: install
 install: ivory-backend-acl2
 
-.PHONY: loop
-loop: Loop.hs ivory-backend-acl2
-	runhaskell -W Loop.hs
-
 .PHONY: ivory-backend-acl2
 ivory-backend-acl2: ivory-backend-acl2/dist/setup-config
-ivory-backend-acl2/dist/setup-config: mira ivory-backend-acl2/src/Ivory/Compile/ACL2.hs
+ivory-backend-acl2/dist/setup-config: mira/dist/setup-config ivory-backend-acl2/src/Ivory/Compile/ACL2.hs
 	cd ivory-backend-acl2 && cabal clean
 	cd ivory-backend-acl2 && cabal build
 	cd ivory-backend-acl2 && cabal install

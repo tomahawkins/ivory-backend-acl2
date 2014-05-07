@@ -54,6 +54,7 @@ data Cont
   | Return  (Maybe Var)             -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
   | Push    Var Cont                -- ^ Push a value onto the stack.
   | Let     Var Value Cont          -- ^ Brings a new variable into scope and assigns it a value.
+  | Store   Var Value Cont          -- ^ Store a value to a ref.
   | If      Var Cont Cont           -- ^ Conditionally follow one continuation or another.
   | Assert  Var Cont                -- ^ Assert a value and continue.
   | Assume  Var Cont                -- ^ State an assumption and continue.
@@ -70,6 +71,7 @@ instance Show Cont where
     Assert  a b          -> printf "assert %s\n%s" a (show b)
     Assume  a b          -> printf "assume %s\n%s" a (show b)
     Let     a b c        -> printf "let %s = %s\n%s" a (show b) (show c)
+    Store   a b c        -> printf "store %s = %s\n%s" a (show b) (show c)
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
@@ -91,13 +93,16 @@ variables = nub . ("retval" :) . concatMap proc
     If      a b c    -> a : cont b ++ cont c
     Assert  a b      -> a : cont b
     Assume  a b      -> a : cont b
-    Let     a b c    -> a : b' ++ cont c
-      where
-      b' = case b of
-        Var a         -> [a]
-        Literal _     -> []
-        Pop           -> []
-        Intrinsic _ a -> a
+    Let     a b c    -> a : value b ++ cont c
+    Store   a b c    -> a : value b ++ cont c
+
+  value :: Value -> [Var]
+  value a = case a of
+    Var a         -> [a]
+    Literal _     -> []
+    Pop           -> []
+    Intrinsic _ a -> a
+
 
 -- | All free (unbound) variables in a continuation.
 contFreeVars :: Cont -> [Var]
@@ -108,13 +113,8 @@ contFreeVars = nub . cont ["retval"]
     Call    _ args a -> concatMap var args ++ case a of { Nothing -> []; Just a -> cont i a }
     Return  _        -> []
     Push    a b      -> var a ++ cont i b
-    Let     a b c    -> vars ++ cont (a : i) c
-      where
-      vars = case b of
-        Var       a   -> var a
-        Literal   _   -> []
-        Pop           -> []
-        Intrinsic _ a -> concatMap var a
+    Let     a b c    -> value b ++ cont (a : i) c
+    Store   a b c    -> var a ++ value b ++ cont i c
     Halt          -> []
     If      a b c -> var a ++ cont i b ++ cont i c
     Assert  a b   -> var a ++ cont i b
@@ -122,6 +122,13 @@ contFreeVars = nub . cont ["retval"]
     where
     var :: Var -> [Var]
     var a = if elem a i then [] else [a]
+
+    value :: Value -> [Var]
+    value a = case a of
+      Var       a   -> var a
+      Literal   _   -> []
+      Pop           -> []
+      Intrinsic _ a -> concatMap var a
 
 -- | Convert a procedure to make explicit use of the stack to save and restore variables across procedure calls.
 explicitStack :: Proc -> Proc
@@ -146,6 +153,7 @@ explicitStack (Proc name args measure body) = Proc name args measure $ cont body
     Assert  a b         -> Assert a $ cont b
     Assume  a b         -> Assume a $ cont b
     Let     a b c       -> Let a b $ cont c
+    Store   a b c       -> Store a b $ cont c
 
 -- | Replace a continuation given a pattern to match.
 replaceCont :: (Cont -> Maybe Cont) -> Cont -> Cont
@@ -157,53 +165,10 @@ replaceCont replacement a = case replacement a of
     Return  a     -> Return a
     Push    a b   -> Push a $ rep b
     Let     a b c -> Let a b $ rep c
+    Store   a b c -> Store a b $ rep c
     If      a b c -> If a (rep b) (rep c)
     Assert  a b   -> Assert a $ rep b
     Assume  a b   -> Assume a $ rep b
   where
   rep = replaceCont replacement
-
-{-
-
-Questions and Ideas:
-
-Q: How should continuations be represented in ACL2?
-
-One thought is to collect all the pushed continuations and turn them into functions.
-To be compliant with ACL2's restriction on first class functions, a Push operation
-would then push a corresponding code, not the function, onto the continuation stack.
-On a Return, a code would be popped of the stack and appropriate continuation would be called.
-
-Compiled Ivory procedures would take the continuation stack as an extra argument.
-
-Branches on If statements would also be turned into continuation functions.
-The If would then select and call the appropriate continuation.
-
-Or perhaps, every continuation gets its own continuation function. 
-
-
-Q: How to handle Ivory state in ACL2 (Store, Assign, etc)?
-
-Since CPS turns everything into a tail call, I think state can be 
-managed by passing the global state into every compiled Ivory function
-and continuation function.
-
-
-Q: How to handle loops in ACL2?
-
-Fixed duration Loops can be rewritten Forever loops with conditional breaks.
-Is it possible rewrite Forever loops into a combination of CPS tricks?
-
-
-Q: How are assertions verified?
-
-Are programs rewritten (truncated) to assertion point and verified independently?
-Would ACL2 be smart enough to tie this information back to the larger program?
-
-Or would the compiled programs return all the assertions collect throughout the execution,
-which ACL2 would verify independently?  But this would still happen under one defthm,
-so I'm not sure how the various assertions would serve as lemmas for larger proofs.
-
--}
-
 
