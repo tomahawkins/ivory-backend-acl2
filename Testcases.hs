@@ -86,7 +86,7 @@ factorialTests =
 
 -- A test of loops and arrays.
 loopTest :: Def ('[Ix 10] :-> Uint32)
-loopTest = proc "someLoopFunc" $ \ix ->
+loopTest = proc "loopTest" $ \ix ->
      ensures (<=? 10)
    $ body
    $ do

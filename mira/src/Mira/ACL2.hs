@@ -126,7 +126,9 @@ append :: Expr -> Expr -> Expr
 append a b = call "append" [a, b]
 
 let' :: [(String, Expr)] -> Expr -> Expr
-let' a b = call "let*" [obj [ obj [var n, e] | (n, e) <- a ], b]
+let' a b = case b of
+  Obj [Lit "let*", Obj lets, expr] -> call "let*" [obj $ [ obj [var n, e] | (n, e) <- a ] ++ lets, expr]
+  _ -> call "let*" [obj [ obj [var n, e] | (n, e) <- a ], b]
 
 var :: String -> Expr
 var = Lit
