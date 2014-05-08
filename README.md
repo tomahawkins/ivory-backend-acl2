@@ -89,7 +89,53 @@ factorial = proc "factorial" $ \ n -> body $
 
 This time the verification returns a `FAIL`.
 
-## A Closer Look at the Compilation Process
+## Using the Generated ACL2
+
+Now fix the factorial function and rerun the termination verification.
+This will compile the Ivory factorial function to ACL2 in the file: __factorial-cps.lisp__.
+The resulting ACL2 factorial function looks like this:
+
+```lisp
+( defun
+  factorial
+  ( stack
+    heap
+    var0
+  )
+  ...
+)
+```
+
+You will notice that factorial takes 3 arguments, not just one.  These extra arguments
+are the stack and heap used in the ACL2 representation of Ivory.  When calling an Ivory
+function in ACL2, pass in __nil__ for the starting stack and heap.
+
+Now that we have factorial in ACL2, let's prove a property about it.
+Add the following theorem to the bottom of the file and run it through ACL2:
+
+```lisp
+(thm (equal (factorial nil nil 4) 24))
+```
+
+Running:
+```
+$ acl2 < factorial-cps.lisp
+```
+
+Results in:
+```
+Summary
+Form:  ( THM ...)
+Rules: ((:EXECUTABLE-COUNTERPART EQUAL)
+        (:EXECUTABLE-COUNTERPART FACTORIAL))
+Time:  0.00 seconds (prove: 0.00, print: 0.00, other: 0.00)
+Prover steps counted:  6
+
+Proof succeeded.
+ACL2 !>Bye.
+```
+
+# A Closer Look at the Compilation Process
 
 Running the above example produces the following files,
 which are the various intermediate representations (IRs)

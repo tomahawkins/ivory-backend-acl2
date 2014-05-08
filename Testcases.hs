@@ -176,6 +176,8 @@ main = do
   --  then putStrLn "Tests passed."
   --  else putStrLn "Tests failed."
   --putStrLn "Termination tests:"
+  pass <- verifyTermination $ package "factorial" $ incl factorial
+  putStrLn (if pass then "pass" else "FAIL")
   pass <- verifyTermination $ package "loopTest" $ incl loopTest
   putStrLn (if pass then "pass" else "FAIL")
   --pass <- verifyTermination $ package "infiniteRecursionTest" $ incl infiniteRecursionTest
