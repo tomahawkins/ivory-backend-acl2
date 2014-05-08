@@ -160,9 +160,9 @@ CompilerAssert | Compiler generated assertions.                      | X        
 Local          | Local variable introduction.                        | X           | factorialTests
 Call           | Function calls.                                     | X           | factorialTests
 Loop           | A loop over a fixed iteration.                      | X           | loopTest
-Store          | A store operation to a variable or an array.        |             | loopTest
-AllocRef       | Allocation reference.                               |             | loopTest
-Defef          | Pointer dereference.                                |             | loopTest 
+Store          | A store operation to a variable or an array.        | X           | loopTest
+AllocRef       | Allocation reference.                               | X           | loopTest
+Defef          | Pointer dereference.                                | X           | loopTest 
 Assign         | Variable assignment.                                |             |          
 Forever        | A forever loop.                                     |             |          
 Break          | A break statement for a loop.                       |             |          
