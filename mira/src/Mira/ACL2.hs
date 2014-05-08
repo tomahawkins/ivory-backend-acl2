@@ -14,6 +14,10 @@ module Mira.ACL2
   , car
   , cdr
   , nth
+  , len
+  , take'
+  , nthcdr
+  , append
   , let'
   , if'
   , case'
@@ -108,6 +112,18 @@ cdr a = call "cdr" [a]
 
 nth :: Expr -> Expr -> Expr
 nth a b = call "nth" [a, b]
+
+len :: Expr -> Expr
+len a = call "len" [a]
+
+take' :: Expr -> Expr -> Expr
+take' a b = call "take" [a, b]
+
+nthcdr :: Expr -> Expr -> Expr
+nthcdr a b = call "nthcdr" [a, b]
+
+append :: Expr -> Expr -> Expr
+append a b = call "append" [a, b]
 
 let' :: [(String, Expr)] -> Expr -> Expr
 let' a b = call "let*" [obj [ obj [var n, e] | (n, e) <- a ], b]

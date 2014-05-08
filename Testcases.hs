@@ -171,13 +171,13 @@ allTests = concat
 
 main :: IO ()
 main = do
-  result <- verifyModules allTests
-  if result
-    then putStrLn "Tests passed."
-    else putStrLn "Tests failed."
-  putStrLn "Termination tests:"
-  --pass <- verifyTermination $ package "loopTest" $ incl loopTest
-  --putStrLn (if pass then "pass" else "FAIL")
+  --result <- verifyModules allTests
+  --if result
+  --  then putStrLn "Tests passed."
+  --  else putStrLn "Tests failed."
+  --putStrLn "Termination tests:"
+  pass <- verifyTermination $ package "loopTest" $ incl loopTest
+  putStrLn (if pass then "pass" else "FAIL")
   --pass <- verifyTermination $ package "infiniteRecursionTest" $ incl infiniteRecursionTest
   --putStrLn (if not pass then "pass" else "FAIL")
   --pass <- verifyTermination $ package "structArrayTest" $ do

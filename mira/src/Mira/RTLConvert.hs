@@ -67,12 +67,15 @@ cont a = case a of
 
   Let a b c -> do
     case b of
-      Var b              -> copy  b a
+      Var     b          -> copy  b a
+      Ref     b          -> copy  b a  --XXX Not correct.
+      Deref   b          -> copy  b a  --XXX Not correct.
       Literal b          -> const' b a
       C.Pop              -> pop a
       C.Intrinsic i args -> intrinsic i args a
     cont c
-  Store a b c -> cont $ Let a b c  --XXX Probably not correct.
+
+  Store a b c -> cont $ Let a (Var b) c  --XXX Probably not correct.
 
   If a b c -> do
     onTrue <- genVar

@@ -26,9 +26,11 @@ instance Show Proc where
 
 -- | Values used in let bindings.
 data Value
-  = Var       Var         -- ^ A variable reference.
-  | Literal   Literal     -- ^ A constant.
-  | Pop                   -- ^ Pop a value off the stack.
+  = Var       Var               -- ^ A variable reference.
+  | Literal   Literal           -- ^ A constant.
+  | Pop                         -- ^ Pop a value off the stack.
+  | Ref       Var               -- ^ Allocate a ref with an initial value.
+  | Deref     Var               -- ^ Dereference a ref.
   | Intrinsic Intrinsic [Var]   -- ^ An application of an intrinsic to a list of arguments.
 
 instance Show Value where
@@ -36,6 +38,8 @@ instance Show Value where
     Var a            -> a
     Literal a        -> show a
     Pop              -> "pop"
+    Ref   a          -> "ref " ++ a
+    Deref a          -> "deref " ++ a
     Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " args)
 
 instance Num Value where
@@ -49,29 +53,29 @@ instance Num Value where
 
 -- | Continuations.
 data Cont
-  = Halt                            -- ^ End the program or loop.
-  | Call    Var [Var] (Maybe Cont)  -- ^ Push the continuation onto the stack (if one exists) and call a function with arguments.
-  | Return  (Maybe Var)             -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
-  | Push    Var Cont                -- ^ Push a value onto the stack.
-  | Let     Var Value Cont          -- ^ Brings a new variable into scope and assigns it a value.
-  | Store   Var Value Cont          -- ^ Store a value to a ref.
-  | If      Var Cont Cont           -- ^ Conditionally follow one continuation or another.
-  | Assert  Var Cont                -- ^ Assert a value and continue.
-  | Assume  Var Cont                -- ^ State an assumption and continue.
+  = Halt                             -- ^ End the program or loop.
+  | Call     Var [Var] (Maybe Cont)  -- ^ Push the continuation onto the stack (if one exists) and call a function with arguments.
+  | Return   (Maybe Var)             -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
+  | Push     Var Cont                -- ^ Push a value onto the stack.
+  | Let      Var Value Cont          -- ^ Brings a new variable into scope and assigns it a value.
+  | Store    Var Var Cont            -- ^ Store a value to a ref.
+  | If       Var Cont Cont           -- ^ Conditionally follow one continuation or another.
+  | Assert   Var Cont                -- ^ Assert a value and continue.
+  | Assume   Var Cont                -- ^ State an assumption and continue.
 
 instance Show Cont where
   show a = case a of
-    Halt                 -> "halt\n"
-    Call    a b Nothing  -> printf "%s(%s)\n" a (intercalate ", " b)
-    Call    a b (Just c) -> printf "%s(%s)\n%s" a (intercalate ", " b) (show c)
-    Return  (Just a)     -> printf "return %s\n" a
-    Return  Nothing      -> "return\n"
-    Push    a b          -> printf "push %s\n" a ++ show b
-    If      a b c        -> printf "if (%s)\n" a ++ indent (show b) ++ "\nelse\n" ++ indent (show c)
-    Assert  a b          -> printf "assert %s\n%s" a (show b)
-    Assume  a b          -> printf "assume %s\n%s" a (show b)
-    Let     a b c        -> printf "let %s = %s\n%s" a (show b) (show c)
-    Store   a b c        -> printf "store %s = %s\n%s" a (show b) (show c)
+    Halt                  -> "halt\n"
+    Call     a b Nothing  -> printf "%s(%s)\n" a (intercalate ", " b)
+    Call     a b (Just c) -> printf "%s(%s)\n%s" a (intercalate ", " b) (show c)
+    Return   (Just a)     -> printf "return %s\n" a
+    Return   Nothing      -> "return\n"
+    Push     a b          -> printf "push %s\n" a ++ show b
+    If       a b c        -> printf "if (%s)\n" a ++ indent (show b) ++ "\nelse\n" ++ indent (show c)
+    Assert   a b          -> printf "assert %s\n%s" a (show b)
+    Assume   a b          -> printf "assume %s\n%s" a (show b)
+    Let      a b c        -> printf "let %s = %s\n%s" a (show b) (show c)
+    Store    a b c        -> printf "store %s = %s\n%s" a b (show c)
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
@@ -85,22 +89,24 @@ variables = nub . ("retval" :) . concatMap proc
 
   cont :: Cont -> [Var]
   cont a = case a of
-    Halt             -> []
-    Call    _ a b    -> a ++ case b of { Nothing -> []; Just b -> cont b }
-    Return  (Just a) -> [a]
-    Return  Nothing  -> []
-    Push    a b      -> a : cont b
-    If      a b c    -> a : cont b ++ cont c
-    Assert  a b      -> a : cont b
-    Assume  a b      -> a : cont b
-    Let     a b c    -> a : value b ++ cont c
-    Store   a b c    -> a : value b ++ cont c
+    Halt              -> []
+    Call     _ a b    -> a ++ case b of { Nothing -> []; Just b -> cont b }
+    Return   (Just a) -> [a]
+    Return   Nothing  -> []
+    Push     a b      -> a : cont b
+    If       a b c    -> a : cont b ++ cont c
+    Assert   a b      -> a : cont b
+    Assume   a b      -> a : cont b
+    Let      a b c    -> a : value b ++ cont c
+    Store    a b c    -> a : b : cont c
 
   value :: Value -> [Var]
   value a = case a of
     Var a         -> [a]
     Literal _     -> []
     Pop           -> []
+    Ref a         -> [a]
+    Deref a       -> [a]
     Intrinsic _ a -> a
 
 
@@ -110,15 +116,15 @@ contFreeVars = nub . cont ["retval"]
   where
   cont :: [Var] -> Cont -> [Var]
   cont i a = case a of
-    Call    _ args a -> concatMap var args ++ case a of { Nothing -> []; Just a -> cont i a }
-    Return  _        -> []
-    Push    a b      -> var a ++ cont i b
-    Let     a b c    -> value b ++ cont (a : i) c
-    Store   a b c    -> var a ++ value b ++ cont i c
-    Halt          -> []
-    If      a b c -> var a ++ cont i b ++ cont i c
-    Assert  a b   -> var a ++ cont i b
-    Assume  a b   -> var a ++ cont i b
+    Call     _ a b -> concatMap var a ++ case b of { Nothing -> []; Just a -> cont i a }
+    Return   _     -> []
+    Push     a b   -> var a ++ cont i b
+    Let      a b c -> value b ++ cont (a : i) c
+    Store    a b c -> var a ++ var b ++ cont i c
+    Halt           -> []
+    If       a b c -> var a ++ cont i b ++ cont i c
+    Assert   a b   -> var a ++ cont i b
+    Assume   a b   -> var a ++ cont i b
     where
     var :: Var -> [Var]
     var a = if elem a i then [] else [a]
@@ -128,6 +134,8 @@ contFreeVars = nub . cont ["retval"]
       Var       a   -> var a
       Literal   _   -> []
       Pop           -> []
+      Ref       a   -> var a
+      Deref     a   -> var a
       Intrinsic _ a -> concatMap var a
 
 -- | Convert a procedure to make explicit use of the stack to save and restore variables across procedure calls.

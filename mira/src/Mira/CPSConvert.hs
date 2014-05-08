@@ -49,8 +49,10 @@ cpsStmts a cont = case a of
       C.Return Nothing  -> return $ Return Nothing  -- Again, ignores cont.
       C.Assert a -> cpsExpr a $ \ a -> return $ Assert a cont
       C.Assume a -> cpsExpr a $ \ a -> return $ Assume a cont
-      C.Let    a b -> cpsExpr b $ \ b -> return $ Let a (Var b) cont
-      C.Store  a b -> cpsExpr b $ \ b -> return $ Store a (Var b) cont
+      C.Let    a b -> cpsExpr b $ \ b -> return $ Let   a (Var   b) cont
+      C.Ref    a b -> cpsExpr b $ \ b -> return $ Let   a (Ref   b) cont
+      C.Deref  a b -> cpsExpr b $ \ b -> return $ Let   a (Deref b) cont
+      C.Store  a b -> cpsExpr b $ \ b -> return $ Store a b cont
       C.Call Nothing fun args -> f [] args
         where
         --f :: [Var] -> [C.Expr i] -> CPS i (Cont i)

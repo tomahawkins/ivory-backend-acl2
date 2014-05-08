@@ -161,9 +161,9 @@ Local          | Local variable introduction.                        | X        
 Call           | Function calls.                                     | X           | factorialTests
 Loop           | A loop over a fixed iteration.                      | X           | loopTest
 Store          | A store operation to a variable or an array.        |             | loopTest
+AllocRef       | Allocation reference.                               |             | loopTest
 Defef          | Pointer dereference.                                |             | loopTest 
 Assign         | Variable assignment.                                |             |          
-AllocRef       | Allocation reference.                               |             |          
 Forever        | A forever loop.                                     |             |          
 Break          | A break statement for a loop.                       |             |          
 RefCopy        |                                                     |             |          

@@ -20,7 +20,7 @@ acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
   opt1     = call "set-irrelevant-formals-ok"     [lit "t"]
   opt2     = call "set-ignore-ok"                 [lit "t"]
   assert   = defun "assert-cond" ["a", "b"] $ var "b"
-  callCont = defun "call-cont" ["stack", "retval"] $ if' (consp stack) (f [0 .. n - 1]) retval
+  callCont = defun "call-cont" ["stack", "heap", "retval"] $ if' (consp stack) (f [0 .. n - 1]) retval
     where
     f :: [Int] -> Expr
     f a = case a of
@@ -60,10 +60,10 @@ proc (Proc name args measure body) = do
   case measure of
     Nothing -> do
       (i, f, c) <- get
-      set (i, f ++ [defun name ("stack" : args) (if' (foldl (and') t $ map (integerp . var) args) body nil)], c)
+      set (i, f ++ [defun name ("stack" : "heap" : args) (if' (foldl (and') t $ map (integerp . var) args) body nil)], c)
     Just m -> do 
       (i, f, c) <- get
-      set (i, f ++ [defun' name ("stack" : args) (exprACL2 m) (if' (foldl (and') t $ map (integerp . var) args) body nil)], c)
+      set (i, f ++ [defun' name ("stack" : "heap" : args) (exprACL2 m) (if' (foldl (and') t $ map (integerp . var) args) body nil)], c)
 
 addCont :: Cont -> CN String
 addCont body = do  -- stack and retval are args to continuation function.
@@ -77,8 +77,8 @@ cont :: Cont -> CN Expr
 cont a = case a of
   Call f args (Just ret) -> do
     name <- addCont ret
-    return $ call f $ cons (lit $ show name) stack : map var args
-  Call f args Nothing -> return $ call f $ stack : map var args
+    return $ call f $ cons (lit $ show name) stack : heap : map var args
+  Call f args Nothing -> return $ call f $ stack : heap : map var args
   Halt         -> return nil
   Assert a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
   Assume a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
@@ -88,12 +88,18 @@ cont a = case a of
     c <- cont c
     case b of
       Var     b        -> return $ let' [(a, var b)] c
+      Ref     b        -> return $ let' [(a, len heap), ("heap", append heap (cons (var b) nil))] c
+      Deref   b        -> return $ let' [(a, nth (var b) heap)] c
       Literal b        -> return $ let' [(a, lit $ showLit b)] c
       Pop              -> return $ let' [(a, car stack), ("stack", cdr stack)] c
       Intrinsic i args -> return $ let' [(a, intrinsicACL2 i (map var args !!))] c
-  Return (Just a) -> return $ call "call-cont" [stack, var a]
-  Return Nothing  -> return $ call "call-cont" [stack, nil]
+  Store  a b c -> do
+    c <- cont c
+    return $ let' [("heap", append (take' (var a) heap) $ cons (var b) (nthcdr (var a + 1) heap))] c
+  Return (Just a) -> return $ call "call-cont" [stack, heap, var a]
+  Return Nothing  -> return $ call "call-cont" [stack, heap, nil]
 
 stack  = var "stack"
+heap   = var "heap"
 retval = var "retval"
 

@@ -15,8 +15,8 @@ compile name cll = do
   writeFile (name ++ ".cll")  $ unlines $ map show cll 
   writeFile (name ++ ".cps1") $ unlines $ map show cps1
   writeFile (name ++ ".cps2") $ unlines $ map show cps2
-  writeFile (name ++ ".rtl")  $ show rtl 
   writeFile (name ++ "-cps.lisp") $ unlines $ map show acl2CPS
+  writeFile (name ++ ".rtl")  $ show rtl 
   writeFile (name ++ "-rtl.lisp") $ unlines $ map show acl2RTL
   where
   cps1    = cpsConvert        cll 
