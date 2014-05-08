@@ -4,6 +4,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Main (main) where
 
@@ -43,6 +45,10 @@ basicTests =
   , basicTest "basic19"   True  $ assert $ true  ? (true , true )
   , basicTest "basic20"   True  $ assert $ false ? (false, true )
   , basicTest "basic21"   True  $ assert $ false ? (true , true )
+  , basicTest "basic22"   True  $ assert $ (3 .% 7) ==? (3 :: Sint32)
+  , basicTest "basic23"   True  $ assert $ negate 3 ==? (-3 :: Sint32)
+  , basicTest "basic24"   True  $ assert $ abs (-3) ==? (3 :: Sint32)
+  , basicTest "basic25"   True  $ assert $ signum 0 ==? (0 :: Sint32)
   ]
   where
   basicTest :: String -> Bool -> Stmt -> (Bool, Module)
@@ -96,6 +102,20 @@ infiniteRecursionTest = proc "callForever" $ body $ do
   call infiniteRecursionTest
   ret 0
 
+--struct Foo { i    :: Stored Uint32 }
+--[ivory|
+--struct Bar { name :: Array 32 (Stored Uint32) }
+-- |]
+[ivory|
+struct Foo { i :: Stored Uint32 }
+struct Bar { name :: Array 32 (Stored Uint32) }
+|]
+
+-- A test of structures, arrays, and pointers.
+structArrayTest :: Def ('[Ref s (Struct "Bar")] :-> Uint32)
+structArrayTest = proc "structArrayTest" $ \ s -> body $ do
+  a <- deref $ (s ~> name) ! 0
+  ret a
 
 
 {-
@@ -156,8 +176,13 @@ main = do
     then putStrLn "Tests passed."
     else putStrLn "Tests failed."
   putStrLn "Termination tests:"
-  pass <- verifyTermination $ package "loopTest" $ incl loopTest
-  putStrLn (if pass then "pass" else "FAIL")
-  pass <- verifyTermination $ package "infiniteRecursionTest" $ incl infiniteRecursionTest
-  putStrLn (if not pass then "pass" else "FAIL")
+  --pass <- verifyTermination $ package "loopTest" $ incl loopTest
+  --putStrLn (if pass then "pass" else "FAIL")
+  --pass <- verifyTermination $ package "infiniteRecursionTest" $ incl infiniteRecursionTest
+  --putStrLn (if not pass then "pass" else "FAIL")
+  --pass <- verifyTermination $ package "structArrayTest" $ do
+  --  defStruct (Proxy :: Proxy "Foo")
+  --  defStruct (Proxy :: Proxy "Bar")
+  --  incl structArrayTest
+  --putStrLn (if pass then "pass" else "FAIL")
 

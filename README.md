@@ -156,16 +156,16 @@ IfTE           | If-then-else.                                       | X        
 Return         | Return from a function call with an optional value. | X           | factorialTests
 Assert         | User assertions.                                    | X           | basicTests
 Assume         | User assumptions.                                   | X           |          
-CompilerAssert | Compiler generated assertions.                      | X           |          
+CompilerAssert | Compiler generated assertions.                      | X           | loopTest
 Local          | Local variable introduction.                        | X           | factorialTests
 Call           | Function calls.                                     | X           | factorialTests
 Loop           | A loop over a fixed iteration.                      | X           | loopTest
+Store          | A store operation to a variable or an array.        |             | loopTest
+Defef          | Pointer dereference.                                |             | loopTest 
 Assign         | Variable assignment.                                |             |          
 AllocRef       | Allocation reference.                               |             |          
-Defef          | Pointer dereference.                                |             |          
 Forever        | A forever loop.                                     |             |          
 Break          | A break statement for a loop.                       |             |          
-Store          | A store operation to a variable or an array.        |             | loopTest
 RefCopy        |                                                     |             |          
 
 ## Ivory Expressions
@@ -176,11 +176,8 @@ ExpSym          | Symbols.                                        | X           
 ExpVar          | Variables.                                      | X           | basicTests
 ExpLiteral      | Liternal constants.                             | X           | basicTests
 ExpExpOp        | Intrinsic (operator) application.               | X           | basicTests
-ExpIndex        | Array indexing.                                 |             | 
-ExpLabel        | Structure label indexing.                       |             |
-ExpToIx         | Casting and expression to an index.             |             |
-ExpAddrOfGlobal | Get the addressof a global memory area.         |             |
-ExpMaxMin       | True is max value for type, false in min value. |             |
+ExpIndex        | Array indexing.                                 |             | structArrayTest
+ExpLabel        | Structure label indexing.                       |             | structArrayTest
 
 ## Ivory Intrinsics
 
@@ -195,12 +192,12 @@ ExpNot            | X           | basicTests
 ExpAnd            | X           | basicTests
 ExpOr             | X           | basicTests
 ExpMul            | X           | factorialTests
-ExpMod            | X           |
+ExpMod            | X           | basicTests
 ExpAdd            | X           | basicTests
 ExpSub            | X           | basicTests
-ExpNegate         | X           |
-ExpAbs            | X           |
-ExpSignum         | X           |
+ExpNegate         | X           | basicTests
+ExpAbs            | X           | basicTests
+ExpSignum         | X           | basicTests
 ExpDiv            |             |
 ExpRecip          |             |
 ExpFExp           |             |
