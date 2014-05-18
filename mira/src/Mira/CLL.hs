@@ -25,10 +25,10 @@ data Stmt
   | Assert   Expr
   | Assume   Expr
   | Let      Var Expr
-  | Ref      Var Expr
+  | Alloc    Var Int
   | Store    Var Expr
   | Loop     Var Expr Bool Expr [Stmt]
-  | Deref    Var Expr
+  | Block    [Stmt]
 
 instance Show Stmt where
   show a = case a of
@@ -40,10 +40,10 @@ instance Show Stmt where
     Assert  a            -> printf "assert %s\n" $ show a
     Assume  a            -> printf "assume %s\n" $ show a
     Let     a b          -> printf "let %s = %s\n" a $ show b
-    Ref     a b          -> printf "ref %s = %s\n" a $ show b
+    Alloc   a b          -> printf "alloc %s %d\n" a b
     Store   a b          -> printf "%s = %s\n" a $ show b
     Loop    a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
-    Deref    a b         -> printf "%s = %s\n" a $ show b
+    Block   a            -> concatMap show a
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines

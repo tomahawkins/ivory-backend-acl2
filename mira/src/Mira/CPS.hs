@@ -26,20 +26,24 @@ instance Show Proc where
 
 -- | Values used in let bindings.
 data Value
-  = Var       Var               -- ^ A variable reference.
-  | Literal   Literal           -- ^ A constant.
-  | Pop                         -- ^ Pop a value off the stack.
-  | Ref       Var               -- ^ Allocate a ref with an initial value.
-  | Deref     Var               -- ^ Dereference a ref.
-  | Intrinsic Intrinsic [Var]   -- ^ An application of an intrinsic to a list of arguments.
+  = Var         Var               -- ^ A variable reference.
+  | Literal     Literal           -- ^ A constant.
+  | Pop                           -- ^ Pop a value off the stack.
+  | Deref       Var               -- ^ Dereference a ref.
+  | Alloc       Int               -- ^ Allocate space from the heap.
+  | ArrayIndex  Var Var           -- ^ Array indexing.
+  | StructIndex Var String        -- ^ Structure indexing.
+  | Intrinsic   Intrinsic [Var]   -- ^ An application of an intrinsic to a list of arguments.
 
 instance Show Value where
   show a = case a of
     Var a            -> a
     Literal a        -> show a
     Pop              -> "pop"
-    Ref   a          -> "ref " ++ a
     Deref a          -> "deref " ++ a
+    Alloc a          -> printf "alloc %d" a
+    ArrayIndex a b   -> printf "%s[%s]" a b
+    StructIndex a b  -> printf "%s.%s"  a b
     Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " args)
 
 instance Num Value where
@@ -105,8 +109,10 @@ variables = nub . ("retval" :) . concatMap proc
     Var a         -> [a]
     Literal _     -> []
     Pop           -> []
-    Ref a         -> [a]
     Deref a       -> [a]
+    Alloc _       -> []
+    ArrayIndex a b -> [a, b]
+    StructIndex a _ -> [a]
     Intrinsic _ a -> a
 
 
@@ -134,8 +140,10 @@ contFreeVars = nub . cont ["retval"]
       Var       a   -> var a
       Literal   _   -> []
       Pop           -> []
-      Ref       a   -> var a
       Deref     a   -> var a
+      Alloc     _   -> []
+      ArrayIndex a b -> var a ++ var b
+      StructIndex a _ -> var a
       Intrinsic _ a -> concatMap var a
 
 -- | Convert a procedure to make explicit use of the stack to save and restore variables across procedure calls.

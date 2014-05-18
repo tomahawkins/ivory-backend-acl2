@@ -106,8 +106,8 @@ cllStmt a = case a of
   I.Local    _ a (I.InitExpr _ b) -> C.Let (var a) $ cllExpr b
 
   -- What are the right semantics for the following?
-  I.AllocRef _ a b            -> C.Ref      (var a) (C.Var $ var b)
-  I.Deref    _ a b            -> C.Deref    (var a) $ cllExpr b
+  I.AllocRef _ a b            -> C.Block [C.Alloc (var a) 1, C.Store (var a) (C.Var $ var b)]
+  I.Deref    _ a b            -> C.Let      (var a) $ Deref $ cllExpr b
   I.Store    _ (I.ExpVar a) b -> C.Store    (var a) $ cllExpr b
 
   I.Call   _ Nothing  fun args  -> C.Call Nothing        (var fun) $ map (cllExpr . tValue) args
@@ -133,6 +133,9 @@ cllExpr a = case a of
   I.ExpVar a -> Var $ var a
   I.ExpLit a -> Literal $ lit a
   I.ExpOp op args -> Intrinsic (cllIntrinsic op) $ map cllExpr args
+  I.ExpIndex _ a _ b -> ArrayIndex (cllExpr a) (cllExpr b)
+  I.ExpLabel _ a b   -> StructIndex (cllExpr a) b
+  I.ExpToIx a _ -> cllExpr a   -- Is it ok to ignore the maximum bound?
   a -> error $ "Unsupported Ivory expression: " ++ show a
 
 cllIntrinsic :: ExpOp -> Intrinsic

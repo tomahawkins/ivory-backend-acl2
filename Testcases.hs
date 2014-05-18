@@ -117,6 +117,11 @@ structArrayTest = proc "structArrayTest" $ \ s -> body $ do
   a <- deref $ (s ~> name) ! 0
   ret a
 
+arrayTest :: Def ('[] :-> ())
+arrayTest = proc "arrayTest" $ body $ do
+  a <- local (iarray $ replicate 10 (ival $ (0 :: Uint32)))
+  arrayMap (\ix -> store (a ! (ix :: Ix 10)) 1)
+  retVoid
 
 {-
 
@@ -171,15 +176,17 @@ allTests = concat
 
 main :: IO ()
 main = do
+  putStrLn "Basic tests:"
   --result <- verifyModules allTests
   --if result
   --  then putStrLn "Tests passed."
   --  else putStrLn "Tests failed."
-  --putStrLn "Termination tests:"
-  pass <- verifyTermination $ package "factorial" $ incl factorial
-  putStrLn (if pass then "pass" else "FAIL")
-  pass <- verifyTermination $ package "loopTest" $ incl loopTest
-  putStrLn (if pass then "pass" else "FAIL")
+
+  putStrLn "Termination tests:"
+  --pass <- verifyTermination $ package "factorial" $ incl factorial
+  --putStrLn (if pass then "pass" else "FAIL")
+  --pass <- verifyTermination $ package "loopTest" $ incl loopTest
+  --putStrLn (if pass then "pass" else "FAIL")
   --pass <- verifyTermination $ package "infiniteRecursionTest" $ incl infiniteRecursionTest
   --putStrLn (if not pass then "pass" else "FAIL")
   --pass <- verifyTermination $ package "structArrayTest" $ do
@@ -187,4 +194,8 @@ main = do
   --  defStruct (Proxy :: Proxy "Bar")
   --  incl structArrayTest
   --putStrLn (if pass then "pass" else "FAIL")
+  pass <- verifyTermination $ package "arrayTest" $ do
+    incl arrayTest
+  putStrLn (if pass then "pass" else "FAIL")
+
 

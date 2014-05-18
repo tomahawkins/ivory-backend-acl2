@@ -68,7 +68,6 @@ cont a = case a of
   Let a b c -> do
     case b of
       Var     b          -> copy  b a
-      Ref     b          -> copy  b a  --XXX Not correct.
       Deref   b          -> copy  b a  --XXX Not correct.
       Literal b          -> const' b a
       C.Pop              -> pop a

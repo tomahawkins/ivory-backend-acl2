@@ -38,6 +38,7 @@ cpsStmts a cont = case a of
   a : b -> do
     cont <- cpsStmts b cont
     case a of
+      C.Block a -> cpsStmts a cont
       C.If a b c -> do
         f <- genVar
         let args = contFreeVars cont
@@ -50,8 +51,7 @@ cpsStmts a cont = case a of
       C.Assert a -> cpsExpr a $ \ a -> return $ Assert a cont
       C.Assume a -> cpsExpr a $ \ a -> return $ Assume a cont
       C.Let    a b -> cpsExpr b $ \ b -> return $ Let   a (Var   b) cont
-      C.Ref    a b -> cpsExpr b $ \ b -> return $ Let   a (Ref   b) cont
-      C.Deref  a b -> cpsExpr b $ \ b -> return $ Let   a (Deref b) cont
+      C.Alloc  a b -> return $ Let a (Alloc b) cont
       C.Store  a b -> cpsExpr b $ \ b -> return $ Store a b cont
       C.Call Nothing fun args -> f [] args
         where
@@ -91,6 +91,18 @@ cpsExpr a k = case a of
     v <- genVar
     cont <- k v
     return $ Let v (Literal a) cont
+  C.Deref a -> do
+    v <- genVar
+    cont <- k v
+    cpsExpr a $ \ a -> return $ Let v (Deref a) cont
+  C.ArrayIndex a b -> do
+    v <- genVar
+    cont <- k v
+    cpsExpr a $ \ a -> cpsExpr b $ \ b -> return $ Let v (ArrayIndex a b) cont
+  C.StructIndex a b -> do
+    v <- genVar
+    cont <- k v
+    cpsExpr a $ \ a -> return $ Let v (StructIndex a b) cont
   C.Intrinsic op args -> f args []
     where
     --f :: [C.Expr] -> [Var] -> CPS (Cont i)

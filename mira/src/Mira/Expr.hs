@@ -50,14 +50,20 @@ instance Num Literal where
   fromInteger = LitInteger
 
 data Expr
-  = Var       Var
-  | Literal   Literal
-  | Intrinsic Intrinsic [Expr]
+  = Var         Var
+  | Literal     Literal
+  | Deref       Expr
+  | ArrayIndex  Expr Expr
+  | StructIndex Expr String
+  | Intrinsic   Intrinsic [Expr]
 
 instance Show Expr where
   show a = case a of
-    Var a -> a
-    Literal a -> show a
+    Var         a    -> a
+    Literal     a    -> show a
+    Deref       a    -> printf "deref %s" $ show a
+    ArrayIndex  a b  -> printf "%s[%s]" (show a) (show b)
+    StructIndex a b  -> printf "%s.%s" (show a) b
     Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " $ map show args)
 
 data Intrinsic

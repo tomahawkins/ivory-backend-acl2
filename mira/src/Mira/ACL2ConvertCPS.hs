@@ -86,13 +86,20 @@ cont a = case a of
   Push   a b   -> do { b <- cont b; return $ let' [("stack", cons (var a) stack)] b }
   Let    a b c -> do
     c <- cont c
-    case b of
-      Var     b        -> return $ let' [(a, var b)] c
-      Ref     b        -> return $ let' [(a, len heap), ("heap", append heap (cons (var b) nil))] c
-      Deref   b        -> return $ let' [(a, nth (var b) heap)] c
-      Literal b        -> return $ let' [(a, lit $ showLit b)] c
-      Pop              -> return $ let' [(a, car stack), ("stack", cdr stack)] c
-      Intrinsic i args -> return $ let' [(a, intrinsicACL2 i (map var args !!))] c
+    return $ let' b' c
+    where
+    b' = case b of
+      Var     b        -> [(a, var b)]
+      Alloc   b        -> [(a, len heap), ("heap", append heap $ space b)]
+      Deref   b        -> [(a, nth (var b) heap)]
+      ArrayIndex  b c  -> [(a, nth (var b + var c) heap)]
+      --StructIndex b c  -> [(a, 
+      Literal b        -> [(a, lit $ showLit b)]
+      Pop              -> [(a, car stack), ("stack", cdr stack)]
+      Intrinsic i args -> [(a, intrinsicACL2 i (map var args !!))]
+    space n
+      | n <= 0    = nil
+      | otherwise = cons 0 $ space $ n - 1
   Store  a b c -> do
     c <- cont c
     return $ let' [("heap", append (take' (var a) heap) $ cons (var b) (nthcdr (var a + 1) heap))] c
