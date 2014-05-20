@@ -172,6 +172,7 @@ assembleInstruction labelAddr varAddr' a = case a of
   PushCont  a     -> obj [codePushCont,  labelAddr a               ]
   Const     a b   -> obj [codeConst,     lit $ showLit a, varAddr b   ]
   Intrinsic a b c -> obj [codeIntrinsic, fromIntegral $ encodeIntrinsic a, obj (map varAddr b), varAddr c]
+  Undefined       -> lit "undefined"
   where
   varAddr = fromIntegral . varAddr'
 

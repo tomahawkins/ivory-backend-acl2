@@ -123,49 +123,6 @@ arrayTest = proc "arrayTest" $ body $ do
   arrayMap (\ix -> store (a ! (ix :: Ix 10)) 1)
   retVoid
 
-{-
-
--- Limits a number between two bounds.
-limit :: Def ('[Sint32, Sint32, Sint32] :-> Sint32)
-limit = proc "limit" $ \ low high n ->
-  requires (low <=? high) $
-  ensures  (<=? high)     $
-  ensures  (>=? low)      $
-  body $ ifte_ (n >? high) (ret high) $ ifte_ (n <? low) (ret low) (ret n)
-
-
--- Build a test using the limit function.
-limitTest :: String -> Bool -> Stmt -> (Bool, Module)
-limitTest name expected a = (expected, m)
-  where
-  m = package name $ do
-    incl limit
-    incl $ proc "main" $ body $ do
-      a
-      retVoid
-
--- Combine all the positive tests above into one test.  (ACL2 can't handle the increased size.)
---combinedBasicTest :: (Bool, Module)
---combinedBasicTest = basicTest "combinedBasicTest" True $ sequence_ [ b | (_, a, b) <- basicTests, a ]
-
--- Some tests calling the limit function.
-limitTests :: [(Bool, Module)]
-limitTests =
-  [ limitTest "limit1" True $ do
-      a <- call limit 32 48 56
-      assert $ a ==? 48
-  , limitTest "limit2" True $ do
-      a <- call limit 32 48 20
-      assert $ a ==? 32
-  , limitTest "limit3" True $ do
-      a <- call limit 32 48 42
-      assert $ a ==? 42
-  , limitTest "limit4" False $ do
-      _ <- call limit 48 32 40  -- Check that the precondition fails.
-      return ()
-  ]
--}
-
 
 -- A list of all testcases.
 allTests :: [(Bool, Module)]
@@ -183,19 +140,17 @@ main = do
   --  else putStrLn "Tests failed."
 
   putStrLn "Termination tests:"
-  --pass <- verifyTermination $ package "factorial" $ incl factorial
-  --putStrLn (if pass then "pass" else "FAIL")
-  --pass <- verifyTermination $ package "loopTest" $ incl loopTest
-  --putStrLn (if pass then "pass" else "FAIL")
-  --pass <- verifyTermination $ package "infiniteRecursionTest" $ incl infiniteRecursionTest
-  --putStrLn (if not pass then "pass" else "FAIL")
-  --pass <- verifyTermination $ package "structArrayTest" $ do
+  verifyTermination' "factorial" $ incl factorial
+  verifyTermination' "loopTest" $ incl loopTest
+  verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
+  verifyTermination' "arrayTest" $ do incl arrayTest
+  --pass <- verifyTermination' "structArrayTest" $ do
   --  defStruct (Proxy :: Proxy "Foo")
   --  defStruct (Proxy :: Proxy "Bar")
   --  incl structArrayTest
-  --putStrLn (if pass then "pass" else "FAIL")
-  pass <- verifyTermination $ package "arrayTest" $ do
-    incl arrayTest
-  putStrLn (if pass then "pass" else "FAIL")
+  where
+  verifyTermination' name a =  do
+    pass <- verifyTermination $ package name $ a
+    putStrLn $ name ++ " terminates: " ++ (if pass then "pass" else "FAIL")
 
 

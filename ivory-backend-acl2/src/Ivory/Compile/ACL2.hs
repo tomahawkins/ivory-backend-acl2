@@ -97,18 +97,16 @@ cllStmts = map cllStmt
 
 cllStmt :: I.Stmt -> C.Stmt
 cllStmt a = case a of
-  I.IfTE a b c -> C.If (cllExpr a) (cllStmts b) (cllStmts c)
-  I.Return a   -> C.Return $ Just $ cllExpr $ tValue a
-  I.ReturnVoid -> C.Return Nothing
-  I.Assert         a -> C.Assert $ cllExpr a
-  I.CompilerAssert a -> C.Assert $ cllExpr a
-  I.Assume         a -> C.Assume $ cllExpr a
-  I.Local    _ a (I.InitExpr _ b) -> C.Let (var a) $ cllExpr b
-
-  -- What are the right semantics for the following?
-  I.AllocRef _ a b            -> C.Block [C.Alloc (var a) 1, C.Store (var a) (C.Var $ var b)]
-  I.Deref    _ a b            -> C.Let      (var a) $ Deref $ cllExpr b
-  I.Store    _ (I.ExpVar a) b -> C.Store    (var a) $ cllExpr b
+  I.IfTE           a b c -> C.If (cllExpr a) (cllStmts b) (cllStmts c)
+  I.Return         a     -> C.Return $ Just $ cllExpr $ tValue a
+  I.ReturnVoid           -> C.Return Nothing
+  I.Assert         a     -> C.Assert $ cllExpr a
+  I.CompilerAssert a     -> C.Assert $ cllExpr a
+  I.Assume         a     -> C.Assume $ cllExpr a
+  I.Local          _ a b -> C.Let (var a) $ cllInit b
+  I.AllocRef       _ a b -> C.Block [C.Let (var a) $ Alloc 1, C.Store (C.LHSVar $ var a) (C.Var $ var b)]
+  I.Deref          _ a b -> C.Let   (var a) $ Deref $ cllExpr b
+  I.Store          _ a b -> C.Store (cllLHS a) $ cllExpr b
 
   I.Call   _ Nothing  fun args  -> C.Call Nothing        (var fun) $ map (cllExpr . tValue) args
   I.Call   _ (Just r) fun args  -> C.Call (Just $ var r) (var fun) $ map (cllExpr . tValue) args
@@ -122,10 +120,22 @@ cllStmt a = case a of
   I.Forever _     -> error $ "Unsupported Ivory statement: " ++ show a
   I.Break         -> error $ "Unsupported Ivory statement: " ++ show a
   I.Comment _     -> error $ "Unsupported Ivory statement: " ++ show a
-  I.Store   _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
-  I.Local   _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
   I.Assign  _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
 
+cllInit :: I.Init -> C.Expr
+cllInit a = case a of
+  I.InitZero      -> Literal $ LitInteger 0
+  I.InitExpr  _ b -> cllExpr b
+  I.InitArray a   -> Array $ map cllInit a
+  I.InitStruct a  -> Struct [ (n, cllInit v) | (n, v) <- a ]
+
+cllLHS :: I.Expr -> C.LHS
+cllLHS a = case a of
+  I.ExpSym a -> C.LHSVar a
+  I.ExpVar a -> C.LHSVar $ var a
+  I.ExpLabel _ a b -> C.LHSStructIndex (cllLHS a) b
+  I.ExpIndex _ a _ b -> C.LHSArrayIndex (cllLHS a) (cllExpr b)
+  _ -> error $ "Invalid LHS: " ++ show a
 
 cllExpr :: I.Expr -> C.Expr
 cllExpr a = case a of

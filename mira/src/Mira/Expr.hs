@@ -6,7 +6,6 @@ module Mira.Expr
   , encodeIntrinsic
   , intrinsicACL2
   , allIntrinsics
-  , exprACL2
   , showLit
   ) where
 
@@ -53,6 +52,9 @@ data Expr
   = Var         Var
   | Literal     Literal
   | Deref       Expr
+  | Alloc       Int
+  | Array       [Expr]
+  | Struct      [(Var, Expr)]
   | ArrayIndex  Expr Expr
   | StructIndex Expr String
   | Intrinsic   Intrinsic [Expr]
@@ -62,6 +64,9 @@ instance Show Expr where
     Var         a    -> a
     Literal     a    -> show a
     Deref       a    -> printf "deref %s" $ show a
+    Alloc       a    -> printf "alloc %d" a
+    Array       a    -> printf "array [%s]"  $ intercalate ", " $ map show a
+    Struct      a    -> printf "struct {%s}" $ intercalate ", " [ printf "%s: %s" n (show v) | (n, v) <- a ] 
     ArrayIndex  a b  -> printf "%s[%s]" (show a) (show b)
     StructIndex a b  -> printf "%s.%s" (show a) b
     Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " $ map show args)
@@ -129,12 +134,6 @@ intrinsicACL2 a arg = case a of
   Negate -> 0 - arg 0
   Abs    -> if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0)
   Signum -> if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0
-
-exprACL2 :: Expr -> A.Expr
-exprACL2 a = case a of
-  Var a -> var a
-  Literal a -> lit $ showLit a
-  Intrinsic i args -> intrinsicACL2 i (map exprACL2 args !!)
 
 showLit :: Literal -> String
 showLit a = case a of

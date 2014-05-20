@@ -51,8 +51,7 @@ cpsStmts a cont = case a of
       C.Assert a -> cpsExpr a $ \ a -> return $ Assert a cont
       C.Assume a -> cpsExpr a $ \ a -> return $ Assume a cont
       C.Let    a b -> cpsExpr b $ \ b -> return $ Let   a (Var   b) cont
-      C.Alloc  a b -> return $ Let a (Alloc b) cont
-      C.Store  a b -> cpsExpr b $ \ b -> return $ Store a b cont
+      C.Store  a b -> cpsLHS a $ \ a -> cpsExpr b $ \ b -> return $ Store a b cont
       C.Call Nothing fun args -> f [] args
         where
         --f :: [Var] -> [C.Expr i] -> CPS i (Cont i)
@@ -84,6 +83,16 @@ cpsStmts a cont = case a of
           Halt -> Just $ Let one 1 $ Let i (Intrinsic (if incr then Add else Sub) [i, one]) $ Call fun args Nothing
           _    -> Nothing
 
+cpsLHS :: C.LHS -> (Var -> CPS Cont) -> CPS Cont
+cpsLHS a k = case a of
+  C.LHSVar a -> k a
+  C.LHSArrayIndex  a b -> cpsLHS a $ \ a -> cpsExpr b $ \ b -> cpsExpr (C.Intrinsic Add [C.Var a, C.Var b]) k
+
+cpsExprs :: [C.Expr] -> ([Var] -> CPS Cont) -> CPS Cont
+cpsExprs a k = case a of
+  [] -> k []
+  a : b -> cpsExpr a $ \ a -> cpsExprs b $ \ b -> k $ a : b
+  
 cpsExpr :: C.Expr -> (Var -> CPS Cont) -> CPS Cont
 cpsExpr a k = case a of
   C.Var a -> k a
@@ -95,6 +104,14 @@ cpsExpr a k = case a of
     v <- genVar
     cont <- k v
     cpsExpr a $ \ a -> return $ Let v (Deref a) cont
+  C.Alloc a -> do
+    v <- genVar
+    cont <- k v
+    return $ Let v (Alloc a) cont
+  --C.Array a -> do
+    --v <- genVar
+    --cont <- k v
+    --cpsExprs a $ \ a -> return $ Let v (Alloc $ length a)
   C.ArrayIndex a b -> do
     v <- genVar
     cont <- k v

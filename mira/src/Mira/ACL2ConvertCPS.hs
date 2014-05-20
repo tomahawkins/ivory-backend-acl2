@@ -8,7 +8,8 @@ import MonadLib
 
 import Mira.ACL2
 import Mira.CPS
-import Mira.Expr (intrinsicACL2, showLit, exprACL2)
+import Mira.Expr (intrinsicACL2, showLit)
+import qualified Mira.Expr as E
 import Mira.RecTopoSort
 
 type CN = StateT (Int, [Expr], [(String, Expr)]) Id
@@ -109,4 +110,11 @@ cont a = case a of
 stack  = var "stack"
 heap   = var "heap"
 retval = var "retval"
+
+exprACL2 :: E.Expr -> Expr
+exprACL2 a = case a of
+  E.Var a -> var a
+  E.Literal a -> lit $ showLit a
+  E.Intrinsic i args -> intrinsicACL2 i (map exprACL2 args !!)
+  _ -> error $ "Unsupported expression in measure: " ++ show a
 

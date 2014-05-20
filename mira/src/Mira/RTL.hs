@@ -26,6 +26,7 @@ module Mira.RTL
   , pop
   , const'
   , intrinsic
+  , undefined'
   ) where
 
 import Data.List
@@ -51,6 +52,7 @@ data Instruction
   | Pop       Var          -- ^ Pop a value off the stack.
   | Const     Literal Var  -- ^ Load a literal into a var.
   | Intrinsic Intrinsic [Var] Var  -- ^ Call an intrinsic and assign result to var.
+  | Undefined
 
 instance Show Program where
   show (Program p) = unlines $ map show p
@@ -70,6 +72,7 @@ instance Show Instruction where
     Pop       a     -> printf "\tpop  %s" a
     Const     a b   -> printf "\tconst' (%s) %s" (show a) b
     Intrinsic i a b -> printf "\tintrinsic (%s) (%s) %s" (show i) (intercalate ", " a) b
+    Undefined       ->        "\tundefined"
 
 -- | All the variables in a program.
 variables :: Program -> [Var]
@@ -90,6 +93,7 @@ variables (Program p) = nub $ concatMap f p
     Pop       a     -> [a]
     Const     _ a   -> [a]
     Intrinsic _ a b -> a ++ [b]
+    Undefined       -> []
 
 -- | The address of all labels in a program.
 labels :: Program -> [(Label, Int)]
@@ -166,4 +170,7 @@ const' a b = instr $ Const a b
 
 intrinsic :: Intrinsic -> [Var] -> Var -> RTL a ()
 intrinsic a b c = instr $ Intrinsic a b c
+
+undefined' :: RTL a ()
+undefined' = instr $ Undefined
 

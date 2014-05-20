@@ -68,8 +68,11 @@ cont a = case a of
   Let a b c -> do
     case b of
       Var     b          -> copy  b a
-      Deref   b          -> copy  b a  --XXX Not correct.
       Literal b          -> const' b a
+      Deref   _          -> undefined'
+      Alloc   _          -> undefined'
+      ArrayIndex  _ _    -> undefined'
+      StructIndex _ _    -> undefined'
       C.Pop              -> pop a
       C.Intrinsic i args -> intrinsic i args a
     cont c
