@@ -63,12 +63,12 @@ instance Show Expr where
   show a = case a of
     Var         a    -> a
     Literal     a    -> show a
-    Deref       a    -> printf "deref %s" $ show a
+    Deref       a    -> printf "(deref %s)" $ show a
     Alloc            -> printf "alloc"
     Array       a    -> printf "array [%s]"  $ intercalate ", " $ map show a
     Struct      a    -> printf "struct {%s}" $ intercalate ", " [ printf "%s: %s" n (show v) | (n, v) <- a ] 
-    ArrayIndex  a b  -> printf "%s[%s]" (show a) (show b)
-    StructIndex a b  -> printf "%s.%s" (show a) b
+    ArrayIndex  a b  -> printf "(%s[%s])" (show a) (show b)
+    StructIndex a b  -> printf "(%s.%s)" (show a) b
     Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " $ map show args)
 
 data Intrinsic

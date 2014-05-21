@@ -112,25 +112,28 @@ struct Foo { i :: Stored Uint32 }
 struct Bar { name :: Array 32 (Stored Uint32) }
 |]
 
--- A test of structures, arrays, and pointers.
-structArrayTest :: Def ('[Ref s (Struct "Bar")] :-> Uint32)
-structArrayTest = proc "structArrayTest" $ \ s -> body $ do
-  a <- deref $ (s ~> name) ! 0
+structTest :: Def ('[] :-> Uint32)
+structTest = proc "structTest" $ body $ do
+  struct <- local $ istruct [ i .= ival 22 ]
+  a <- deref $ struct ~> i
   ret a
 
 arrayTest :: Def ('[] :-> Uint32)
 arrayTest = proc "arrayTest" $ body $ do
-  -- Allocate a 4 element array with elements [0, 1, 2, 3].
-  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ map ival [0, 1, 2, 3]
+  -- Allocate a 4 element array with zeros: [0, 0, 0, 0]
+  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 0
+
+  -- Iterate over the array making it: [0, 1, 2, 3]
+  arrayMap $ \ i -> store (array ! i) $ safeCast i  --XXX Having both this loop and the loop below gives ACL2 troubles.
 
   -- Create a reference to sum the elements in the array.
   sum <- local $ ival (0 :: Uint32)
 
   -- Loop across the array summing the elements.
   arrayMap $ \ i ->  do
-     n <- deref sum
-     m <- deref $ array ! i
-     store sum $ n + m
+    n <- deref sum
+    m <- deref $ array ! i
+    store sum $ n + m
 
   -- Return the computed sum.
   deref sum >>= ret
@@ -155,11 +158,11 @@ main = do
   --verifyTermination' "factorial" $ incl factorial
   --verifyTermination' "loopTest" $ incl loopTest
   --verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
-  verifyTermination' "arrayTest" $ do incl arrayTest
-  --pass <- verifyTermination' "structArrayTest" $ do
-  --  defStruct (Proxy :: Proxy "Foo")
-  --  defStruct (Proxy :: Proxy "Bar")
-  --  incl structArrayTest
+  --verifyTermination' "arrayTest" $ incl arrayTest
+  verifyTermination' "structTest" $ do
+    defStruct (Proxy :: Proxy "Foo")
+    --defStruct (Proxy :: Proxy "Bar")
+    incl structTest
   where
   verifyTermination' name a =  do
     pass <- verifyTermination $ package name $ a

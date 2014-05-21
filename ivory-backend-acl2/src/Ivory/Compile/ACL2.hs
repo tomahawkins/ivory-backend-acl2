@@ -135,8 +135,8 @@ cllExpr a = case a of
   I.ExpVar a -> Var $ var a
   I.ExpLit a -> Literal $ lit a
   I.ExpOp op args -> Intrinsic (cllIntrinsic op) $ map cllExpr args
-  I.ExpIndex _ a _ b -> ArrayIndex (cllExpr a) (cllExpr b)
-  I.ExpLabel _ a b   -> StructIndex (cllExpr a) b
+  I.ExpIndex _ a _ b -> ArrayIndex  (Deref $ cllExpr a) (cllExpr b)
+  I.ExpLabel _ a b   -> StructIndex (Deref $ cllExpr a) b
   I.ExpToIx a _ -> cllExpr a   -- Is it ok to ignore the maximum bound?
   I.ExpSafeCast _ a -> cllExpr a
   a -> error $ "Unsupported Ivory expression: " ++ show a
