@@ -123,6 +123,8 @@ arrayTest = proc "arrayTest" $ body $ do
   -- Allocate a 4 element array with elements [0, 1, 2, 3].
   (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 0
 
+  arrayMap $ \ i -> store (array ! i) $ safeCast i
+
   -- Create a reference to sum the elements in the array.
   sum <- local $ ival (0 :: Uint32)
 

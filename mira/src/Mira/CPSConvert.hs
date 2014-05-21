@@ -51,10 +51,7 @@ cpsStmts a cont = case a of
       C.Assert a -> cpsExpr a $ \ a -> return $ Assert a cont
       C.Assume a -> cpsExpr a $ \ a -> return $ Assume a cont
       C.Let    a b -> cpsExpr b $ \ b -> return $ Let   a (Var   b) cont
-      C.Store  a b -> case a of
-        C.ArrayIndex  a i -> cpsExpr a $ \ a -> cpsExpr i $ \ i -> cpsExpr b $ \ b -> return $ Store (SArrayIndex  a i) b cont
-        C.StructIndex a i -> cpsExpr a $ \ a ->                    cpsExpr b $ \ b -> return $ Store (SStructField a i) b cont
-        a                 -> cpsExpr a $ \ a ->                    cpsExpr b $ \ b -> return $ Store (SRef a) b cont
+      C.Store  a b -> cpsExpr a $ \ a -> cpsExpr b $ \ b -> return $ Store a b cont
       C.Call Nothing fun args -> f [] args
         where
         --f :: [Var] -> [C.Expr i] -> CPS i (Cont i)

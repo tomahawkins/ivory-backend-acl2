@@ -206,7 +206,7 @@ CompilerAssert | Compiler generated assertions.                      | X        
 Local          | Local variable introduction.                        | X           | factorialTests
 Call           | Function calls.                                     | X           | factorialTests
 Loop           | A loop over a fixed iteration.                      | X           | loopTest
-Store          | A store operation to a variable or an array.        | X           | loopTest
+Store          | A store operation to a variable, array, or struct.  | X           | loopTest
 AllocRef       | Allocation reference.                               | X           | loopTest
 Defef          | Pointer dereference.                                | X           | loopTest 
 Assign         | Variable assignment.                                |             |          
@@ -222,8 +222,9 @@ ExpSym          | Symbols.                                        | X           
 ExpVar          | Variables.                                      | X           | basicTests
 ExpLiteral      | Liternal constants.                             | X           | basicTests
 ExpExpOp        | Intrinsic (operator) application.               | X           | basicTests
-ExpIndex        | Array indexing.                                 |             | structArrayTest
-ExpLabel        | Structure label indexing.                       |             | structArrayTest
+ExpIndex        | Array indexing.                                 | X           | structArrayTest
+ExpLabel        | Structure label indexing.                       | X           | structArrayTest
+ExpSafeCast     | Type casting.                                   | X           | arrayTest
 
 ## Ivory Intrinsics
 
