@@ -90,20 +90,20 @@ cont a = case a of
     return $ let' b' c
     where
     b' = case b of
-      Var     b        -> [(a, var b)]
-      Alloc   b        -> [(a, len heap), ("heap", append heap $ space b)]
-      Deref   b        -> [(a, nth (var b) heap)]
+      Var         b    -> [(a, var b)]
+      Alloc            -> [(a, len heap), ("heap", append heap $ cons nil nil)]
+      Array       b    -> [(a, len heap), ("heap", append heap $ cons (list $ map var b) nil)]
+      Struct      b    -> [(a, len heap), ("heap", append heap $ cons (list $ [ cons (string n) (var v) | (n, v) <- b ]) nil)]
+      Deref       b    -> [(a, nth (var b) heap)]
       ArrayIndex  b c  -> [(a, nth (var c) $ nth (var b) heap)]
-      StructIndex b c  -> [(a, assoc (string c) $ nth (var b) heap)]
-      Literal b        -> [(a, lit $ showLit b)]
+      StructIndex b c  -> [(a, cdr $ assoc (string c) $ nth (var b) heap)]
+      Literal     b    -> [(a, lit $ showLit b)]
       Pop              -> [(a, car stack), ("stack", cdr stack)]
       Intrinsic i args -> [(a, intrinsicACL2 i (map var args !!))]
-    space n
-      | n <= 0    = nil
-      | otherwise = cons 0 $ space $ n - 1
   Store  a b c -> case a of
-    SRef        a   -> f $ updateNth (var a) (var b) heap
-    SArrayIndex a i -> f $ updateNth (var a) (updateNth (var i) (var b) (nth (var a) heap)) heap
+    SRef         a   -> f $ updateNth (var a) (var b)                                             heap
+    SArrayIndex  a i -> f $ updateNth (var a) (updateNth (var i) (var b)      (nth (var a) heap)) heap
+    SStructField a i -> f $ updateNth (var a) (cons (cons (string i) (var b)) (nth (var a) heap)) heap  -- Just grow the size of the struct, assume assoc grabs the first match.
     where
     f b = do
       c <- cont c

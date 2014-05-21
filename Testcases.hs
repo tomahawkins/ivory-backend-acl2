@@ -6,6 +6,7 @@
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main (main) where
 
@@ -117,11 +118,22 @@ structArrayTest = proc "structArrayTest" $ \ s -> body $ do
   a <- deref $ (s ~> name) ! 0
   ret a
 
-arrayTest :: Def ('[] :-> ())
+arrayTest :: Def ('[] :-> Uint32)
 arrayTest = proc "arrayTest" $ body $ do
-  a <- local (iarray $ replicate 10 (ival $ (0 :: Uint32)))
-  arrayMap (\ix -> store (a ! (ix :: Ix 10)) 1)
-  retVoid
+  -- Allocate a 4 element array with elements [0, 1, 2, 3].
+  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 0
+
+  -- Create a reference to sum the elements in the array.
+  sum <- local $ ival (0 :: Uint32)
+
+  -- Loop across the array summing the elements.
+  arrayMap $ \ i ->  do
+     n <- deref sum
+     m <- deref $ array ! i
+     store sum $ n + m
+
+  -- Return the computed sum.
+  deref sum >>= ret
 
 
 -- A list of all testcases.

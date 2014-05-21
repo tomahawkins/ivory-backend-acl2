@@ -67,10 +67,12 @@ cont a = case a of
 
   Let a b c -> do
     case b of
-      Var     b          -> copy  b a
-      Literal b          -> const' b a
-      Deref   _          -> undefined'
-      Alloc   _          -> undefined'
+      Var         b      -> copy  b a
+      Literal     b      -> const' b a
+      Deref       _      -> undefined'
+      Alloc              -> undefined'
+      Array       _      -> undefined'
+      Struct      _      -> undefined'
       ArrayIndex  _ _    -> undefined'
       StructIndex _ _    -> undefined'
       C.Pop              -> pop a

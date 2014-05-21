@@ -104,18 +104,9 @@ cllStmt a = case a of
   I.CompilerAssert a     -> C.Assert $ cllExpr a
   I.Assume         a     -> C.Assume $ cllExpr a
   I.Local          _ a b -> C.Let (var a) $ cllInit b
-  I.AllocRef       _ a b -> C.Block [C.Let (var a) $ Alloc 1, C.Store (C.LHSVar $ var a) (C.Var $ var b)]
+  I.AllocRef       _ a b -> C.Block [C.Let (var a) Alloc, C.Store (C.Var $ var a) (C.Var $ var b)]
   I.Deref          _ a b -> C.Let   (var a) $ Deref $ cllExpr b
-  I.Store          _ a b -> C.Store (storeTo a) $ cllExpr b
-    where
-    storeTo :: I.Expr -> C.LHS
-    storeTo a = case a of
-      I.ExpSym   a       -> C.SRef a
-      I.ExpVar   a       -> C.SRef $ var a
-      I.ExpIndex _ a _ b -> C.SArrayIndex (storeTo a) (cllExpr b)
-      I.ExpLabel _ a b   -> C.SStructField (storeTo a) b
-      _ -> error $ "Invalid LHS: " ++ show a
-
+  I.Store          _ a b -> C.Store (cllExpr a) (cllExpr b)
 
   I.Call   _ Nothing  fun args  -> C.Call Nothing        (var fun) $ map (cllExpr . tValue) args
   I.Call   _ (Just r) fun args  -> C.Call (Just $ var r) (var fun) $ map (cllExpr . tValue) args

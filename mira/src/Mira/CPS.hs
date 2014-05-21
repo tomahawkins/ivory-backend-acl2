@@ -31,7 +31,7 @@ data Value
   | Literal     Literal           -- ^ A constant.
   | Pop                           -- ^ Pop a value off the stack.
   | Deref       Var               -- ^ Dereference a ref.
-  | Alloc       Int               -- ^ Allocate space from the heap.
+  | Alloc                         -- ^ Allocate one word from the heap.
   | Array       [Var]             -- ^ Array construction.
   | Struct      [(String, Var)]   -- ^ Struct construction.
   | ArrayIndex  Var Var           -- ^ Array indexing.
@@ -44,7 +44,7 @@ instance Show Value where
     Literal a        -> show a
     Pop              -> "pop"
     Deref a          -> "deref " ++ a
-    Alloc a          -> printf "alloc %d" a
+    Alloc            -> printf "alloc"
     Array a          -> printf "array [%s]" $ intercalate ", " a
     Struct a         -> printf "struct {%s}" $ intercalate ", " [ printf "%s: %s" n v | (n, v) <- a ]
     ArrayIndex a b   -> printf "%s[%s]" a b
@@ -125,7 +125,7 @@ variables = nub . ("retval" :) . concatMap proc
     Literal _     -> []
     Pop           -> []
     Deref a       -> [a]
-    Alloc _       -> []
+    Alloc         -> []
     Array a       -> a
     Struct a      -> snd $ unzip a
     ArrayIndex a b -> [a, b]
@@ -163,7 +163,7 @@ contFreeVars = nub . cont ["retval"]
       Literal   _   -> []
       Pop           -> []
       Deref     a   -> var a
-      Alloc     _   -> []
+      Alloc         -> []
       Array      a   -> concatMap var a
       Struct     a   -> concatMap var $ snd $ unzip a
       ArrayIndex a b -> var a ++ var b

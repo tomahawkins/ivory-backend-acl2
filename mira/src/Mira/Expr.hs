@@ -52,7 +52,7 @@ data Expr
   = Var         Var
   | Literal     Literal
   | Deref       Expr
-  | Alloc       Int
+  | Alloc
   | Array       [Expr]
   | Struct      [(Var, Expr)]
   | ArrayIndex  Expr Expr
@@ -64,7 +64,7 @@ instance Show Expr where
     Var         a    -> a
     Literal     a    -> show a
     Deref       a    -> printf "deref %s" $ show a
-    Alloc       a    -> printf "alloc %d" a
+    Alloc            -> printf "alloc"
     Array       a    -> printf "array [%s]"  $ intercalate ", " $ map show a
     Struct      a    -> printf "struct {%s}" $ intercalate ", " [ printf "%s: %s" n (show v) | (n, v) <- a ] 
     ArrayIndex  a b  -> printf "%s[%s]" (show a) (show b)

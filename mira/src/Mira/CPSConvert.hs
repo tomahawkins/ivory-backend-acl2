@@ -102,10 +102,10 @@ cpsExpr a k = case a of
     v <- genVar
     cont <- k v
     cpsExpr a $ \ a -> return $ Let v (Deref a) cont
-  C.Alloc a -> do
+  C.Alloc -> do
     v <- genVar
     cont <- k v
-    return $ Let v (Alloc a) cont
+    return $ Let v Alloc cont
   C.Array items -> do
     array <- genVar
     cont <- k array

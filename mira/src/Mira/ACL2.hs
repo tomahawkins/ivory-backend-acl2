@@ -24,6 +24,7 @@ module Mira.ACL2
   , case'
   , assoc
   , var
+  , list
   , lit
   , string
   , nil
@@ -100,6 +101,9 @@ obj = Obj
 
 quote :: Expr -> Expr
 quote a = call "quote" [a]
+
+list :: [Expr] -> Expr
+list a = call "list" a
 
 consp :: Expr -> Expr
 consp a = call "consp" [a]
