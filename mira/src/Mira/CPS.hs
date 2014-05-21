@@ -3,6 +3,7 @@ module Mira.CPS
   ( Proc         (..)
   , Value        (..)
   , Literal      (..)
+  , StoreTo      (..)
   , Cont         (..)
   , Var
   , variables
@@ -31,6 +32,8 @@ data Value
   | Pop                           -- ^ Pop a value off the stack.
   | Deref       Var               -- ^ Dereference a ref.
   | Alloc       Int               -- ^ Allocate space from the heap.
+  | Array       [Var]             -- ^ Array construction.
+  | Struct      [(String, Var)]   -- ^ Struct construction.
   | ArrayIndex  Var Var           -- ^ Array indexing.
   | StructIndex Var String        -- ^ Structure indexing.
   | Intrinsic   Intrinsic [Var]   -- ^ An application of an intrinsic to a list of arguments.
@@ -42,6 +45,8 @@ instance Show Value where
     Pop              -> "pop"
     Deref a          -> "deref " ++ a
     Alloc a          -> printf "alloc %d" a
+    Array a          -> printf "array [%s]" $ intercalate ", " a
+    Struct a         -> printf "struct {%s}" $ intercalate ", " [ printf "%s: %s" n v | (n, v) <- a ]
     ArrayIndex a b   -> printf "%s[%s]" a b
     StructIndex a b  -> printf "%s.%s"  a b
     Intrinsic a args -> printf "%s(%s)" (show a) (intercalate ", " args)
@@ -62,10 +67,15 @@ data Cont
   | Return   (Maybe Var)             -- ^ Pop a continuation off the stack and execute it.  Saves the return value to the ReturnValue register.
   | Push     Var Cont                -- ^ Push a value onto the stack.
   | Let      Var Value Cont          -- ^ Brings a new variable into scope and assigns it a value.
-  | Store    Var Var Cont            -- ^ Store a value to a ref.
+  | Store    StoreTo Var Cont        -- ^ Store a value to a ref.
   | If       Var Cont Cont           -- ^ Conditionally follow one continuation or another.
   | Assert   Var Cont                -- ^ Assert a value and continue.
   | Assume   Var Cont                -- ^ State an assumption and continue.
+
+data StoreTo
+  = SRef         Var
+  | SArrayIndex  Var Var
+  | SStructField Var String
 
 instance Show Cont where
   show a = case a of
@@ -79,7 +89,12 @@ instance Show Cont where
     Assert   a b          -> printf "assert %s\n%s" a (show b)
     Assume   a b          -> printf "assume %s\n%s" a (show b)
     Let      a b c        -> printf "let %s = %s\n%s" a (show b) (show c)
-    Store    a b c        -> printf "store %s = %s\n%s" a b (show c)
+    Store    a b c        -> printf "store %s = %s\n%s" a' b (show c)
+      where
+      a' = case a of
+        SRef         a   -> a
+        SArrayIndex  a b -> printf "%s[%s]" (show a) (show b)
+        SStructField a b -> printf "%s.%s" (show a) b
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
@@ -102,7 +117,7 @@ variables = nub . ("retval" :) . concatMap proc
     Assert   a b      -> a : cont b
     Assume   a b      -> a : cont b
     Let      a b c    -> a : value b ++ cont c
-    Store    a b c    -> a : b : cont c
+    Store    a b c    -> storeTo a ++ [b] ++ cont c
 
   value :: Value -> [Var]
   value a = case a of
@@ -111,10 +126,17 @@ variables = nub . ("retval" :) . concatMap proc
     Pop           -> []
     Deref a       -> [a]
     Alloc _       -> []
+    Array a       -> a
+    Struct a      -> snd $ unzip a
     ArrayIndex a b -> [a, b]
     StructIndex a _ -> [a]
     Intrinsic _ a -> a
 
+  storeTo :: StoreTo -> [Var]
+  storeTo a = case a of
+    SRef         a   -> [a]
+    SArrayIndex  a b -> [a, b]
+    SStructField a _ -> [a]
 
 -- | All free (unbound) variables in a continuation.
 contFreeVars :: Cont -> [Var]
@@ -126,7 +148,7 @@ contFreeVars = nub . cont ["retval"]
     Return   _     -> []
     Push     a b   -> var a ++ cont i b
     Let      a b c -> value b ++ cont (a : i) c
-    Store    a b c -> var a ++ var b ++ cont i c
+    Store    a b c -> storeTo a ++ var b ++ cont i c
     Halt           -> []
     If       a b c -> var a ++ cont i b ++ cont i c
     Assert   a b   -> var a ++ cont i b
@@ -142,9 +164,17 @@ contFreeVars = nub . cont ["retval"]
       Pop           -> []
       Deref     a   -> var a
       Alloc     _   -> []
+      Array      a   -> concatMap var a
+      Struct     a   -> concatMap var $ snd $ unzip a
       ArrayIndex a b -> var a ++ var b
       StructIndex a _ -> var a
       Intrinsic _ a -> concatMap var a
+
+    storeTo :: StoreTo -> [Var]
+    storeTo a = case a of
+      SRef         a   -> var a
+      SArrayIndex  a b -> var a ++ var b
+      SStructField a _ -> var a
 
 -- | Convert a procedure to make explicit use of the stack to save and restore variables across procedure calls.
 explicitStack :: Proc -> Proc

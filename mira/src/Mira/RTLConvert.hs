@@ -77,7 +77,7 @@ cont a = case a of
       C.Intrinsic i args -> intrinsic i args a
     cont c
 
-  Store a b c -> cont $ Let a (Var b) c  --XXX Probably not correct.
+  Store _ _ _ -> undefined' -- cont $ Let a (Var b) c  --XXX Probably not correct.
 
   If a b c -> do
     onTrue <- genVar

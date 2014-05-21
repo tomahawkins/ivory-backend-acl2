@@ -17,12 +17,15 @@ module Mira.ACL2
   , len
   , take'
   , nthcdr
+  , updateNth
   , append
   , let'
   , if'
   , case'
+  , assoc
   , var
   , lit
+  , string
   , nil
   , t
   , zp
@@ -122,6 +125,9 @@ take' a b = call "take" [a, b]
 nthcdr :: Expr -> Expr -> Expr
 nthcdr a b = call "nthcdr" [a, b]
 
+updateNth :: Expr -> Expr -> Expr -> Expr
+updateNth a b c = call "update-nth" [a, b, c]
+
 append :: Expr -> Expr -> Expr
 append a b = call "append" [a, b]
 
@@ -135,6 +141,9 @@ var = Lit
 
 lit :: String -> Expr
 lit = Lit
+
+string :: String -> Expr
+string = Lit . show
 
 nil :: Expr
 nil = Lit "nil"
@@ -177,4 +186,8 @@ goodbye = call "good-bye" []
 
 mod' :: Expr -> Expr -> Expr
 mod' a b = call "mod" [a, b]
+
+assoc :: Expr -> Expr -> Expr
+assoc a b = call "assoc" [a, b]
+
 

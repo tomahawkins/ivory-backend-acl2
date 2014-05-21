@@ -93,17 +93,21 @@ cont a = case a of
       Var     b        -> [(a, var b)]
       Alloc   b        -> [(a, len heap), ("heap", append heap $ space b)]
       Deref   b        -> [(a, nth (var b) heap)]
-      ArrayIndex  b c  -> [(a, nth (var b + var c) heap)]
-      --StructIndex b c  -> [(a, 
+      ArrayIndex  b c  -> [(a, nth (var c) $ nth (var b) heap)]
+      StructIndex b c  -> [(a, assoc (string c) $ nth (var b) heap)]
       Literal b        -> [(a, lit $ showLit b)]
       Pop              -> [(a, car stack), ("stack", cdr stack)]
       Intrinsic i args -> [(a, intrinsicACL2 i (map var args !!))]
     space n
       | n <= 0    = nil
       | otherwise = cons 0 $ space $ n - 1
-  Store  a b c -> do
-    c <- cont c
-    return $ let' [("heap", append (take' (var a) heap) $ cons (var b) (nthcdr (var a + 1) heap))] c
+  Store  a b c -> case a of
+    SRef        a   -> f $ updateNth (var a) (var b) heap
+    SArrayIndex a i -> f $ updateNth (var a) (updateNth (var i) (var b) (nth (var a) heap)) heap
+    where
+    f b = do
+      c <- cont c
+      return $ let' [("heap", b)] c
   Return (Just a) -> return $ call "call-cont" [stack, heap, var a]
   Return Nothing  -> return $ call "call-cont" [stack, heap, nil]
 

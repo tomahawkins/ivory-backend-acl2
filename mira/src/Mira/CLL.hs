@@ -4,7 +4,6 @@ module Mira.CLL
   , Stmt    (..)
   , Expr    (..)
   , Literal (..)
-  , LHS     (..)
   , Var
   ) where
 
@@ -26,7 +25,7 @@ data Stmt
   | Assert   Expr
   | Assume   Expr
   | Let      Var Expr
-  | Store    LHS Expr
+  | Store    Expr Expr
   | Loop     Var Expr Bool Expr [Stmt]
   | Block    [Stmt]
 
@@ -43,17 +42,6 @@ instance Show Stmt where
     Store   a b          -> printf "%s = %s\n" (show a) (show b)
     Loop    a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
     Block   a            -> concatMap show a
-
-data LHS
-  = LHSVar         Var
-  | LHSArrayIndex  LHS Expr
-  | LHSStructIndex LHS Var
-
-instance Show LHS where
-  show a = case a of
-    LHSVar         a   -> a
-    LHSArrayIndex  a b -> printf "%s[%s]" (show a) (show b)
-    LHSStructIndex a b -> printf "%s.%s" (show a) b
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines

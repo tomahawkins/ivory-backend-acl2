@@ -106,7 +106,16 @@ cllStmt a = case a of
   I.Local          _ a b -> C.Let (var a) $ cllInit b
   I.AllocRef       _ a b -> C.Block [C.Let (var a) $ Alloc 1, C.Store (C.LHSVar $ var a) (C.Var $ var b)]
   I.Deref          _ a b -> C.Let   (var a) $ Deref $ cllExpr b
-  I.Store          _ a b -> C.Store (cllLHS a) $ cllExpr b
+  I.Store          _ a b -> C.Store (storeTo a) $ cllExpr b
+    where
+    storeTo :: I.Expr -> C.LHS
+    storeTo a = case a of
+      I.ExpSym   a       -> C.SRef a
+      I.ExpVar   a       -> C.SRef $ var a
+      I.ExpIndex _ a _ b -> C.SArrayIndex (storeTo a) (cllExpr b)
+      I.ExpLabel _ a b   -> C.SStructField (storeTo a) b
+      _ -> error $ "Invalid LHS: " ++ show a
+
 
   I.Call   _ Nothing  fun args  -> C.Call Nothing        (var fun) $ map (cllExpr . tValue) args
   I.Call   _ (Just r) fun args  -> C.Call (Just $ var r) (var fun) $ map (cllExpr . tValue) args
@@ -128,14 +137,6 @@ cllInit a = case a of
   I.InitExpr  _ b -> cllExpr b
   I.InitArray a   -> Array $ map cllInit a
   I.InitStruct a  -> Struct [ (n, cllInit v) | (n, v) <- a ]
-
-cllLHS :: I.Expr -> C.LHS
-cllLHS a = case a of
-  I.ExpSym a -> C.LHSVar a
-  I.ExpVar a -> C.LHSVar $ var a
-  I.ExpLabel _ a b -> C.LHSStructIndex (cllLHS a) b
-  I.ExpIndex _ a _ b -> C.LHSArrayIndex (cllLHS a) (cllExpr b)
-  _ -> error $ "Invalid LHS: " ++ show a
 
 cllExpr :: I.Expr -> C.Expr
 cllExpr a = case a of
