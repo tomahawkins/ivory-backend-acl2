@@ -121,9 +121,7 @@ structArrayTest = proc "structArrayTest" $ \ s -> body $ do
 arrayTest :: Def ('[] :-> Uint32)
 arrayTest = proc "arrayTest" $ body $ do
   -- Allocate a 4 element array with elements [0, 1, 2, 3].
-  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 0
-
-  arrayMap $ \ i -> store (array ! i) $ safeCast i
+  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ map ival [0, 1, 2, 3]
 
   -- Create a reference to sum the elements in the array.
   sum <- local $ ival (0 :: Uint32)
@@ -154,9 +152,9 @@ main = do
   --  else putStrLn "Tests failed."
 
   putStrLn "Termination tests:"
-  verifyTermination' "factorial" $ incl factorial
-  verifyTermination' "loopTest" $ incl loopTest
-  verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
+  --verifyTermination' "factorial" $ incl factorial
+  --verifyTermination' "loopTest" $ incl loopTest
+  --verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
   verifyTermination' "arrayTest" $ do incl arrayTest
   --pass <- verifyTermination' "structArrayTest" $ do
   --  defStruct (Proxy :: Proxy "Foo")
