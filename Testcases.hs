@@ -148,7 +148,7 @@ allTests = concat
 
 main :: IO ()
 main = do
-  putStrLn "Basic tests:"
+  --putStrLn "Basic tests:"
   --result <- verifyModules allTests
   --if result
   --  then putStrLn "Tests passed."
@@ -158,11 +158,11 @@ main = do
   --verifyTermination' "factorial" $ incl factorial
   --verifyTermination' "loopTest" $ incl loopTest
   --verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
-  --verifyTermination' "arrayTest" $ incl arrayTest
-  verifyTermination' "structTest" $ do
-    defStruct (Proxy :: Proxy "Foo")
-    --defStruct (Proxy :: Proxy "Bar")
-    incl structTest
+  verifyTermination' "arrayTest" $ incl arrayTest
+  --verifyTermination' "structTest" $ do
+  --  defStruct (Proxy :: Proxy "Foo")
+  --  --defStruct (Proxy :: Proxy "Bar")
+  --  incl structTest
   where
   verifyTermination' name a =  do
     pass <- verifyTermination $ package name $ a

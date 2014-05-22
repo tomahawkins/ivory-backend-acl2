@@ -9,6 +9,9 @@ module Mira.CPS
   , contFreeVars
   , explicitStack
   , replaceCont
+  , commonSubExprElim
+  , removeAsserts
+  , removeNullEffect
   ) where
 
 import Data.List
@@ -36,6 +39,7 @@ data Value
   | ArrayIndex  Var Var           -- ^ Array indexing.
   | StructIndex Var String        -- ^ Structure indexing.
   | Intrinsic   Intrinsic [Var]   -- ^ An application of an intrinsic to a list of arguments.
+  deriving Eq
 
 instance Show Value where
   show a = case a of
@@ -127,15 +131,16 @@ contFreeVars = nub . cont ["retval"]
   where
   cont :: [Var] -> Cont -> [Var]
   cont i a = case a of
-    Call     _ a b -> concatMap var a ++ case b of { Nothing -> []; Just a -> cont i a }
-    Return   _     -> []
-    Push     a b   -> var a ++ cont i b
-    Let      a b c -> value b ++ cont (a : i) c
-    Store    a b c -> var a ++ var b ++ cont i c
-    Halt           -> []
-    If       a b c -> var a ++ cont i b ++ cont i c
-    Assert   a b   -> var a ++ cont i b
-    Assume   a b   -> var a ++ cont i b
+    Call     _ a b    -> concatMap var a ++ case b of { Nothing -> []; Just a -> cont i a }
+    Return   Nothing  -> []
+    Return   (Just a) -> var a
+    Push     a b      -> var a ++ cont i b
+    Let      a b c    -> value b ++ cont (a : i) c
+    Store    a b c    -> var a ++ var b ++ cont i c
+    Halt              -> []
+    If       a b c    -> var a ++ cont i b ++ cont i c
+    Assert   a b      -> var a ++ cont i b
+    Assume   a b      -> var a ++ cont i b
     where
     var :: Var -> [Var]
     var a = if elem a i then [] else [a]
@@ -194,4 +199,87 @@ replaceCont replacement a = case replacement a of
     Assume  a b   -> Assume a $ rep b
   where
   rep = replaceCont replacement
+
+-- | Common sub expression elim.
+commonSubExprElim :: Proc -> Proc
+commonSubExprElim (Proc name args measure body) = Proc name args measure $ elim [] [] body
+  where
+  elim :: [(Value, Var)] -> [(Var, Var)] -> Cont -> Cont
+  elim env vars a = case a of
+    Halt -> Halt
+    Call   a b Nothing  -> Call a (map var b) Nothing
+    Call   a b (Just c) -> Call a (map var b) $ Just $ elim' c
+    Return Nothing  -> Return Nothing
+    Return (Just a) -> Return $ Just $ var a
+    Push   a b      -> Push (var a) $ elim' b
+    Let    a b c -> case b' of
+      Var b -> elim env ((a, b) : vars) c
+      _ -> case lookup b' env of
+        Nothing -> Let a b' $ elim ((b', a) : env) vars c
+        Just a' ->            elim env ((a, a') : vars) c
+      where
+      b' = value b
+    Store  a b c -> Store (var a) (var b) $ elim' c
+    If     a b c -> If (var a) (elim' b) (elim' c)
+    Assert a b   -> Assert (var a) $ elim' b
+    Assume a b   -> Assume (var a) $ elim' b
+    where
+    elim' = elim env vars
+
+    var :: Var -> Var
+    var a = case lookup a vars of
+      Nothing -> a
+      Just b  -> b
+
+    value :: Value -> Value
+    value a = case a of
+      Var a            -> Var $ var a
+      Literal a        -> Literal a
+      Pop              -> Pop
+      Deref a          -> Deref $ var a
+      Alloc            -> Alloc
+      Array a          -> Array $ map var a
+      Struct a         -> Struct [ (n, var v) | (n, v) <- a ]
+      ArrayIndex a b   -> ArrayIndex (var a) (var b)
+      StructIndex a b  -> StructIndex (var a) b
+      Intrinsic a args -> Intrinsic a $ map var args
+
+
+-- | Remove assertions.
+removeAsserts :: Proc -> Proc
+removeAsserts (Proc name args measure body) = Proc name args measure $ r body
+  where
+  r :: Cont -> Cont
+  r a = case a of
+    Halt -> Halt
+    Call   a b Nothing  -> Call a b Nothing
+    Call   a b (Just c) -> Call a b $ Just $ r c
+    Return a        -> Return a
+    Push   a b      -> Push a $ r b
+    Let    a b c    -> Let a b $ r c
+    Store  a b c    -> Store a b $ r c
+    If     a b c    -> If a (r b) (r c)
+    Assert _ b      -> r b
+    Assume _ b      -> r b
+
+-- | Remove unused lets.
+removeNullEffect :: Proc -> Proc
+removeNullEffect (Proc name args measure body) = Proc name args measure $ r body
+  where
+  r :: Cont -> Cont
+  r a = case a of
+    Halt -> Halt
+    Call   a b Nothing  -> Call a b Nothing
+    Call   a b (Just c) -> Call a b $ Just $ r c
+    Return a        -> Return a
+    Push   a b      -> Push a $ r b
+    Let    a b c'
+      | elem a $ contFreeVars c -> Let a b c
+      | otherwise               -> c
+      where
+      c = r c'
+    Store  a b c    -> Store a b $ r c
+    If     a b c    -> If a (r b) (r c)
+    Assert a b      -> Assert a $ r b
+    Assume a b      -> Assume a $ r b
 

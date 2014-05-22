@@ -3,7 +3,7 @@ module Mira
   ) where
 
 import Mira.CLL hiding (Expr)
-import Mira.CPS (explicitStack)
+import Mira.CPS (removeNullEffect, removeAsserts, commonSubExprElim, explicitStack)
 import Mira.ACL2ConvertCPS
 import Mira.ACL2ConvertRTL
 import Mira.CPSConvert
@@ -19,7 +19,7 @@ compile name cll = do
   writeFile (name ++ ".rtl")  $ show rtl 
   writeFile (name ++ "-rtl.lisp") $ unlines $ map show acl2RTL
   where
-  cps1    = cpsConvert        cll 
+  cps1    = map removeNullEffect $ map removeAsserts $ map commonSubExprElim $ cpsConvert cll 
   cps2    = map explicitStack cps1
   rtl     = rtlConvert        cps2
   acl2CPS = acl2ConvertCPS    cps2
