@@ -7,6 +7,7 @@ module Ivory.Compile.ACL2
   ) where
 
 import Data.List
+import System.Environment
 import System.IO
 import System.Process
 
@@ -41,7 +42,8 @@ verifyModule expected m = do
   putStr $ "Verifying assertions of:  " ++ name ++ " ... "
   hFlush stdout
   f <- readFile $ modName m ++ "-rtl.lisp"
-  (_, result, _) <- readProcessWithExitCode "acl2" [] f
+  exe <- savedACL2
+  (_, result, _) <- readProcessWithExitCode exe [] f
   let pass = expected == (not $ any (isPrefixOf "ACL2 Error") $ lines result)
   putStrLn $ if pass then "pass" else "FAIL"
   writeFile (name ++ "_assertions.log") result
@@ -50,6 +52,13 @@ verifyModule expected m = do
   return $ terminates && pass
   where
   name = modName m
+
+savedACL2 :: IO FilePath
+savedACL2 = do
+  env <- getEnvironment
+  case lookup "ACL2_SOURCES" env of
+    Nothing -> error "Environment variable ACL2_SOURCES not set."
+    Just a -> return $ a ++ "/saved_acl2"
 
 -- | Verifies a list of modules.
 verifyModules :: [(Bool, Module)] -> IO Bool
@@ -62,7 +71,8 @@ verifyTermination :: Module -> IO Bool
 verifyTermination m = do
   name <- compileModule m
   f <- readFile $ name ++ "-cps.lisp"
-  (_, result, _) <- readProcessWithExitCode "acl2" [] f
+  exe <- savedACL2
+  (_, result, _) <- readProcessWithExitCode exe [] f
   let terminates = not $ any (isPrefixOf "ACL2 Error") $ lines result
   writeFile (name ++ "_termination.log") result
   return terminates

@@ -14,12 +14,16 @@ import Mira.RecTopoSort
 
 type CN = StateT (Int, [Expr], [(String, Expr)]) Id
 
-acl2ConvertCPS :: [Proc] -> [Expr]
-acl2ConvertCPS procs = [opt1, opt2] ++ mutualRecGroups
+acl2ConvertCPS :: FilePath -> [Proc] -> [Expr]
+acl2ConvertCPS acl2Sources procs = opts ++ mutualRecGroups
   where
   ((), (n, funs, conts)) = runId $ runStateT (0, [], []) $ mapM_ proc procs
-  opt1     = call "set-irrelevant-formals-ok"     [lit "t"]
-  opt2     = call "set-ignore-ok"                 [lit "t"]
+  opts =
+    [ call "include-book" [string $ acl2Sources ++ "/books/ccg/ccg", lit ":ttags", obj [obj [lit ":ccg"]], lit ":load-compiled-file", nil]
+    , call "set-termination-method" [lit ":ccg"]
+    , call "set-irrelevant-formals-ok"     [lit "t"]
+    , call "set-ignore-ok"                 [lit "t"]
+    ]
   assert   = defun "assert-cond" ["a", "b"] $ var "b"
   callCont = defun "call-cont" ["stack", "heap", "retval"] $ if' (consp stack) (f [0 .. n - 1]) retval
     where

@@ -156,7 +156,7 @@ main = do
 
   putStrLn "Termination tests:"
   --verifyTermination' "factorial" $ incl factorial
-  --verifyTermination' "loopTest" $ incl loopTest
+  verifyTermination' "loopTest" $ incl loopTest
   --verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
   verifyTermination' "arrayTest" $ incl arrayTest
   --verifyTermination' "structTest" $ do

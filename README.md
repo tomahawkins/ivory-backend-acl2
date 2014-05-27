@@ -26,10 +26,10 @@ This ivory-backend-acl2 library provides a means to compile Ivory programs to AC
 
       `$ cd <ivory-backend-acl2-directory>/ivory-backend-acl2 && cabal install`
 
-1. Install [ACL2](http://www.cs.utexas.edu/users/moore/acl2/) and create a symbolic link
-   named __acl2__ to the ACL2 executable, usually called __saved\_acl2__.  Ensure the link is in the search path.
+1. Install [ACL2](http://www.cs.utexas.edu/users/moore/acl2/) and set the __ACL2_SOURCES__
+   environment variable to point to the installation location:
 
-   `$ ln -s <path-to-acl2>/saved_acl2 acl2`
+   `$ export ACL2_SOURCES=<path-to-acl2-sources>`
 
 # An Example
 

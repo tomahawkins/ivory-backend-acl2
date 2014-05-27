@@ -75,7 +75,7 @@ cpsStmts a cont = case a of
         one  <- genVar
         addProc fun args
           (Just $ E.Intrinsic Add [E.Literal $ LitInteger 1, E.Intrinsic Sub (if incr then [E.Var to, E.Var i] else [E.Var i, E.Var to])]) $
-          Let test (Intrinsic (if incr then Le else Ge) [i, to]) $ If test (replaceCont (f fun i args one) body) cont
+          Let test (Intrinsic (if incr then Le else Ge) [i, to]) $ If test (replaceCont (f fun i args one) body) $ Return Nothing
         return $ Call fun (init : to : args') $ Just cont
         where
         -- Replace Halt with recursive call.
@@ -94,7 +94,7 @@ cpsExpr a k = do
   cont <- k v
   let f a = return $ Let v a cont
   case a of
-    C.Var a     -> f $ Var a
+    C.Var a     -> k a
     C.Literal a -> f $ Literal a
     C.Deref   a -> cpsExpr a $ \ a -> f $ Deref a
     C.Alloc     -> f Alloc
