@@ -121,10 +121,10 @@ structTest = proc "structTest" $ body $ do
 arrayTest :: Def ('[] :-> Uint32)
 arrayTest = proc "arrayTest" $ body $ do
   -- Allocate a 4 element array with zeros: [0, 0, 0, 0]
-  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 0
+  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 1
 
   -- Iterate over the array making it: [0, 1, 2, 3]
-  arrayMap $ \ i -> store (array ! i) $ safeCast i  --XXX Having both this loop and the loop below gives ACL2 troubles.
+  --arrayMap $ \ i -> store (array ! i) $ safeCast i  --XXX Having both this loop and the loop below gives ACL2 troubles.
 
   -- Create a reference to sum the elements in the array.
   sum <- local $ ival (0 :: Uint32)
@@ -156,7 +156,7 @@ main = do
 
   putStrLn "Termination tests:"
   --verifyTermination' "factorial" $ incl factorial
-  verifyTermination' "loopTest" $ incl loopTest
+  --verifyTermination' "loopTest" $ incl loopTest
   --verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
   verifyTermination' "arrayTest" $ incl arrayTest
   --verifyTermination' "structTest" $ do

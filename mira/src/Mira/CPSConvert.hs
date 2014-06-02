@@ -38,6 +38,7 @@ cpsStmts a cont = case a of
   a : b -> do
     cont <- cpsStmts b cont
     case a of
+      C.Null -> return cont
       C.Block a -> cpsStmts a cont
       C.If a b c -> do
         f <- genVar

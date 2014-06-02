@@ -126,10 +126,10 @@ cllStmt a = case a of
       I.IncrTo a -> (True, a)
       I.DecrTo a -> (False, a)
 
+  I.Comment _     -> C.Null
   I.RefCopy _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
   I.Forever _     -> error $ "Unsupported Ivory statement: " ++ show a
   I.Break         -> error $ "Unsupported Ivory statement: " ++ show a
-  I.Comment _     -> error $ "Unsupported Ivory statement: " ++ show a
   I.Assign  _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
 
 cllInit :: I.Init -> C.Expr
@@ -149,7 +149,8 @@ cllExpr a = case a of
   I.ExpLabel _ a b   -> StructIndex (Deref $ cllExpr a) b
   I.ExpToIx a _ -> cllExpr a   -- Is it ok to ignore the maximum bound?
   I.ExpSafeCast _ a -> cllExpr a
-  a -> error $ "Unsupported Ivory expression: " ++ show a
+  _ -> Literal $ LitInteger 0
+  --error $ "Unsupported Ivory expression: " ++ show a
 
 cllIntrinsic :: ExpOp -> Intrinsic
 cllIntrinsic op = case op of

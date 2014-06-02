@@ -28,6 +28,7 @@ data Stmt
   | Store    Expr Expr
   | Loop     Var Expr Bool Expr [Stmt]
   | Block    [Stmt]
+  | Null
 
 instance Show Stmt where
   show a = case a of
@@ -42,6 +43,7 @@ instance Show Stmt where
     Store   a b          -> printf "store %s = %s\n" (show a) (show b)
     Loop    a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
     Block   a            -> concatMap show a
+    Null                 -> ""
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
