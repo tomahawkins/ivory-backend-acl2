@@ -78,29 +78,31 @@ verifyTermination m = do
   return terminates
 
 cllConvert :: I.Proc -> C.Proc
-cllConvert p = C.Proc (I.procSym p) (map (var . tValue) $ I.procArgs p) Nothing $ map cllStmt body
+cllConvert p = C.Proc (I.procSym p) (map (var . tValue) $ I.procArgs p) Nothing requires ensures body
   where
-  body = requires ++ insertEnsures (I.procBody p)
-  requires = map (I.Assert . cond . I.getRequire) $ I.procRequires p
-  ensures :: I.Expr -> I.Stmt
-  --XXX Need to replace all the retvals in ensures conditions with the return expression.
-  --ensures  = map (I.Assert . cond . I.getEnsure ) $ I.procEnsures  p
-  ensures = const $ I.Assert $ I.ExpLit $ I.LitBool True
+  body = map cllStmt $ I.procBody p
+  requires :: [C.Expr]
+  requires = map (cllExpr . cond . I.getRequire) $ I.procRequires p
+  ensures :: [C.Expr -> C.Expr]
+  ensures  = map (retval . cllExpr . cond . I.getEnsure ) $ I.procEnsures  p
   cond a = case a of
     I.CondBool a -> a
     I.CondDeref _ _ _ _ -> error $ "CondDeref not supported."
-
-  insertEnsures' :: I.Stmt -> [I.Stmt]
-  insertEnsures' a = case a of
-    I.IfTE a b c -> [I.IfTE a (insertEnsures b) (insertEnsures c)]
-    I.Loop a b c d -> [I.Loop a b c $ insertEnsures d]
-    I.Forever a -> [I.Forever $ insertEnsures a]
-    I.Return a   -> [ensures $ tValue a, I.Return a]
-    I.ReturnVoid -> [I.ReturnVoid]
-    a -> [a]
-
-  insertEnsures :: [I.Stmt] -> [I.Stmt]
-  insertEnsures = concatMap insertEnsures'
+  retval :: C.Expr -> C.Expr -> C.Expr
+  retval a ret = retval a
+    where
+    retval :: C.Expr -> C.Expr
+    retval a = case a of
+      C.Var "retval" -> ret
+      C.Var a -> C.Var a
+      C.Literal a -> C.Literal a
+      C.Alloc -> C.Alloc
+      C.Deref a -> C.Deref $ retval a
+      C.Array a -> C.Array $ map retval a
+      C.Struct a -> C.Struct [ (a, retval b) | (a, b) <- a ]
+      C.ArrayIndex a b -> C.ArrayIndex (retval a) (retval b)
+      C.StructIndex a b -> C.StructIndex (retval a) b
+      C.Intrinsic a b -> C.Intrinsic a $ map retval b
 
 cllStmts :: [I.Stmt] -> [C.Stmt]
 cllStmts = map cllStmt

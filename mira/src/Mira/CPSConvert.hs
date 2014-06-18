@@ -22,7 +22,7 @@ addProc fun args measure cont = do
   set (i, procs ++ [Proc fun args measure cont])
 
 cpsConvertProc :: C.Proc -> CPS ()
-cpsConvertProc (C.Proc fun args measure body) = do
+cpsConvertProc (C.Proc fun args measure _ _ body) = do
   cont <- cpsStmts body Halt
   addProc fun args measure cont
 

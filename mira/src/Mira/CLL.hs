@@ -12,11 +12,11 @@ import Text.Printf
 
 import Mira.Expr
 
-data Proc = Proc Var [Var] (Maybe Expr) [Stmt]
+data Proc = Proc Var [Var] (Maybe Expr) [Expr] [Expr -> Expr] [Stmt]
 
 instance Show Proc where
-  show (Proc name args Nothing  body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ concatMap show body)
-  show (Proc name args (Just m) body) = printf "%s(%s)\n\tmeasure %s\n%s\n" name (intercalate ", " args) (show m) (indent $ concatMap show body)
+  show (Proc name args Nothing  _ _ body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ concatMap show body)
+  show (Proc name args (Just m) _ _ body) = printf "%s(%s)\n\tmeasure %s\n%s\n" name (intercalate ", " args) (show m) (indent $ concatMap show body)
 
 data Stmt
   = Call     (Maybe Var) Var [Expr]
