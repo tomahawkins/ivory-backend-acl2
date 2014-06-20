@@ -55,6 +55,41 @@ basicTests =
   basicTest :: String -> Bool -> Stmt -> (Bool, Module)
   basicTest name expected a = (expected, package name $ incl $ proc "main" $ body $ a >> retVoid)
 
+intrinsicTest :: Def ('[] :-> ())
+intrinsicTest = proc "intrinsicTest" $ body $ do
+  assert true
+  assert $ iNot false
+  assert $ 1 + 2 ==? (3 :: Sint32)
+  assert $ iNot $ 1 + 2 ==? (4 :: Sint32)
+  assert $ 3 - 2 ==? (1 :: Sint32)
+  assert $ iNot $ 2 - 2 ==? (1 :: Sint32)
+  assert $ 1 /=? (2 :: Sint32)
+  assert $ iNot $ 1 /=? (1 :: Sint32)
+  assert $ 1 <?  (2 :: Sint32)
+  assert $ 3 >?  (2 :: Sint32)
+  assert $ 1 <=? (1 :: Sint32)
+  assert $ 3 >=? (3 :: Sint32)
+  assert $ iNot false
+  assert $ iNot $ iNot true
+  assert $ iNot $ iNot $ iNot false
+  assert $ iNot $ iNot $ iNot $ iNot true
+  assert $ (false .&& false) ==? false
+  assert $ (false .&& true ) ==? false
+  assert $ (true  .&& false) ==? false
+  assert $ (true  .&& true ) ==? true 
+  assert $ (false .|| false) ==? false
+  assert $ (false .|| true ) ==? true
+  assert $ (true  .|| false) ==? true
+  assert $ (true  .|| true ) ==? true 
+  assert $ true  ? (true , false)
+  assert $ true  ? (true , true )
+  assert $ false ? (false, true )
+  assert $ false ? (true , true )
+  assert $ (3 .% 7) ==? (3 :: Sint32)
+  assert $ negate 3 ==? (-3 :: Sint32)
+  assert $ abs (-3) ==? (3 :: Sint32)
+  assert $ signum 0 ==? (0 :: Sint32)
+  retVoid
 
 -- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)
@@ -154,15 +189,17 @@ main = do
   --  then putStrLn "Tests passed."
   --  else putStrLn "Tests failed."
 
-  putStrLn "Termination tests:"
+  --putStrLn "Termination tests:"
   --verifyTermination' "factorial" $ incl factorial
   --verifyTermination' "loopTest" $ incl loopTest
   --verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
-  verifyTermination' "arrayTest" $ incl arrayTest
+  --verifyTermination' "arrayTest" $ incl arrayTest
   --verifyTermination' "structTest" $ do
   --  defStruct (Proxy :: Proxy "Foo")
   --  --defStruct (Proxy :: Proxy "Bar")
   --  incl structTest
+
+  verifyAssertions $ package "intrinsicTest" $ incl intrinsicTest
   where
   verifyTermination' name a =  do
     pass <- verifyTermination $ package name $ a

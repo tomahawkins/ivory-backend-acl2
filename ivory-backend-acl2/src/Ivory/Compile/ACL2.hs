@@ -4,6 +4,7 @@ module Ivory.Compile.ACL2
   , verifyModule
   , verifyModules
   , verifyTermination
+  , verifyAssertions
   ) where
 
 import Data.List
@@ -14,6 +15,7 @@ import System.Process
 import Mira
 import qualified Mira.CLL as C
 import Mira.Expr
+import Mira.Verify
 
 import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Language.Syntax.AST (Module (..), ExpOp (..))
@@ -23,12 +25,17 @@ import qualified Ivory.Language.Syntax.Names as I
 -- | Compiles a module to two different ACL2 representations: assembly and CPS.
 compileModule :: Module -> IO String
 compileModule m = do
-  compile name $ map cllConvert $ procs m
+  compile name $ cllProcs m
   return name
   where
   name = modName m
+
+cllProcs :: Module -> [C.Proc]
+cllProcs = map cllConvert . procs
+  where
   procs :: I.Module -> [I.Proc]
   procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)
+  
 
 -- | Given a expected result, verifies a module.
 verifyModule :: Bool -> Module -> IO Bool
@@ -77,10 +84,17 @@ verifyTermination m = do
   writeFile (name ++ "_termination.log") result
   return terminates
 
+verifyAssertions :: Module -> IO ()
+verifyAssertions m = do
+  r <- verifyProcs $ cllProcs m
+  if r
+    then putStrLn "pass"
+    else putStrLn "fail"
+
 cllConvert :: I.Proc -> C.Proc
 cllConvert p = C.Proc (I.procSym p) (map (var . tValue) $ I.procArgs p) Nothing requires ensures body
   where
-  body = map cllStmt $ I.procBody p
+  body = map cllStmt (I.procBody p)
   requires :: [C.Expr]
   requires = map (cllExpr . cond . I.getRequire) $ I.procRequires p
   ensures :: [C.Expr -> C.Expr]

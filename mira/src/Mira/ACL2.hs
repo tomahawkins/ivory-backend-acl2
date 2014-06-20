@@ -1,11 +1,13 @@
 -- | A DSL for ACL2.
 module Mira.ACL2
   ( Expr (..)
+  , check
   , mutualRecursion
   , defun
   , defun'
   , defconst
   , defthm
+  , thm
   , call
   , obj
   , quote
@@ -41,6 +43,10 @@ module Mira.ACL2
   , mod'
   ) where
 
+import Data.List
+import System.Environment
+import System.Process
+
 data SExpr
   = SV String
   | SA [SExpr]
@@ -73,6 +79,19 @@ sExpr a = case a of
   Obj     a   -> SA $ map sExpr a
   Lit     a   -> SV a
 
+check :: [Expr] -> IO Bool
+check a = do
+  exe <- savedACL2
+  (_, result, _) <- readProcessWithExitCode exe [] $ unlines $ map show a
+  return $ not $ any (isPrefixOf "ACL2 Error") $ lines result
+  where
+  savedACL2 :: IO FilePath
+  savedACL2 = do
+    env <- getEnvironment
+    case lookup "ACL2_SOURCES" env of
+      Nothing -> error "Environment variable ACL2_SOURCES not set."
+      Just a -> return $ a ++ "/saved_acl2"
+
 mutualRecursion :: [Expr] -> Expr
 mutualRecursion = call "mutual-recursion"
 
@@ -92,6 +111,9 @@ defconst name const = call "defconst" [var name, const]
 
 defthm :: String -> Expr -> Expr
 defthm name a = call "defthm" [var name, a]
+
+thm :: Expr -> Expr
+thm a = call "thm" [a]
  
 call :: String -> [Expr] -> Expr
 call a b = Obj $ var a : b

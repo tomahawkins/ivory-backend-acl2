@@ -16,7 +16,8 @@ library
   default-language: Haskell2010
   build-depends:
     base     >= 4.0,
-    monadLib >= 3.7.2
+    monadLib >= 3.7.2,
+    process  >= 1.1
   exposed-modules:
     Mira
     Mira.ACL2
@@ -29,6 +30,7 @@ library
     Mira.RecTopoSort
     Mira.RTL
     Mira.RTLConvert
+    Mira.Verify
   hs-source-dirs: src
   ghc-options: -W
 
