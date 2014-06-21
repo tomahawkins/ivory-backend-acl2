@@ -5,6 +5,7 @@ module Mira.Expr
   , Intrinsic (..)
   , encodeIntrinsic
   , intrinsicACL2
+  , exprACL2
   , allIntrinsics
   , showLit
   ) where
@@ -134,6 +135,18 @@ intrinsicACL2 a arg = case a of
   Negate -> 0 - arg 0
   Abs    -> if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0)
   Signum -> if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0
+
+exprACL2 :: Expr -> A.Expr
+exprACL2 a = case a of
+  Var a -> var a
+  Literal a -> lit $ show a
+  -- Deref       Expr
+  -- Alloc
+  Array       a   -> list $ map exprACL2 a
+  Struct      a   -> list [ cons (string a) (exprACL2 b) | (a, b) <- a ]
+  ArrayIndex  a b -> nth (exprACL2 b) (exprACL2 a)
+  StructIndex a b -> cdr $ assoc (string b) (exprACL2 a)
+  Intrinsic   i args -> intrinsicACL2 i (map exprACL2 args !!)
 
 showLit :: Literal -> String
 showLit a = case a of

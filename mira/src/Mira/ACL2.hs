@@ -38,6 +38,7 @@ module Mira.ACL2
   , not'
   , and'
   , or'
+  , implies
   , goodbye
   , integerp
   , mod'
@@ -82,15 +83,26 @@ sExpr a = case a of
 check :: [Expr] -> IO Bool
 check a = do
   exe <- savedACL2
-  (_, result, _) <- readProcessWithExitCode exe [] $ unlines $ map show a
+  putStrLn code
+  (_, result, _) <- readProcessWithExitCode exe [] code
   return $ not $ any (isPrefixOf "ACL2 Error") $ lines result
   where
+  code = unlines $ map show a
   savedACL2 :: IO FilePath
   savedACL2 = do
     env <- getEnvironment
     case lookup "ACL2_SOURCES" env of
       Nothing -> error "Environment variable ACL2_SOURCES not set."
       Just a -> return $ a ++ "/saved_acl2"
+
+uni :: String -> Expr -> Expr
+uni f a = call f [a]
+
+bin :: String -> Expr -> Expr -> Expr
+bin f a b = call f [a, b]
+
+tri :: String -> Expr -> Expr -> Expr -> Expr
+tri f a b c = call f [a, b, c]
 
 mutualRecursion :: [Expr] -> Expr
 mutualRecursion = call "mutual-recursion"
@@ -113,7 +125,7 @@ defthm :: String -> Expr -> Expr
 defthm name a = call "defthm" [var name, a]
 
 thm :: Expr -> Expr
-thm a = call "thm" [a]
+thm = uni "thm"
  
 call :: String -> [Expr] -> Expr
 call a b = Obj $ var a : b
@@ -122,40 +134,40 @@ obj :: [Expr] -> Expr
 obj = Obj
 
 quote :: Expr -> Expr
-quote a = call "quote" [a]
+quote = uni "quote"
 
 list :: [Expr] -> Expr
 list a = call "list" a
 
 consp :: Expr -> Expr
-consp a = call "consp" [a]
+consp = uni "consp"
 
 cons :: Expr -> Expr -> Expr
-cons a b = call "cons" [a, b]
+cons = bin "cons"
 
 car :: Expr -> Expr
-car a = call "car" [a]
+car = uni "car"
 
 cdr :: Expr -> Expr
-cdr a = call "cdr" [a]
+cdr = uni "cdr"
 
 nth :: Expr -> Expr -> Expr
-nth a b = call "nth" [a, b]
+nth = bin "nth"
 
 len :: Expr -> Expr
-len a = call "len" [a]
+len = uni "len"
 
 take' :: Expr -> Expr -> Expr
-take' a b = call "take" [a, b]
+take' = bin "take"
 
 nthcdr :: Expr -> Expr -> Expr
-nthcdr a b = call "nthcdr" [a, b]
+nthcdr = bin "nthcdr"
 
 updateNth :: Expr -> Expr -> Expr -> Expr
-updateNth a b c = call "update-nth" [a, b, c]
+updateNth = tri "update-nth"
 
 append :: Expr -> Expr -> Expr
-append a b = call "append" [a, b]
+append = bin "append"
 
 let' :: [(String, Expr)] -> Expr -> Expr
 let' a b = case b of
@@ -178,42 +190,44 @@ t :: Expr
 t = Lit "t"
 
 if' :: Expr -> Expr -> Expr -> Expr
-if' a b c = call "if" [a, b, c]
+if' = tri "if"
 
 case' :: Expr -> [(Expr, Expr)] -> Expr -> Expr
 case' a b c = call "case" $ a : [ obj [a, b] | (a, b) <- b ] ++ [call "otherwise" [c]]
 
 zp :: Expr -> Expr
-zp a = call "zp" [a]
+zp = uni "zp"
 
 zip' :: Expr -> Expr
-zip' a = call "zip" [a]
+zip' = uni "zip"
 
 integerp :: Expr -> Expr
-integerp a = call "integerp" [a]
+integerp = uni "integerp"
 
 undefined' :: Expr
 undefined' = Lit "undefined"
 
 equal :: Expr -> Expr -> Expr
-equal a b = call "equal" [a, b]
+equal = bin "equal"
 
 not' :: Expr -> Expr
-not' a = call "not" [a]
+not' = uni "not"
 
 and' :: Expr -> Expr -> Expr
-and' a b = call "and" [a, b]
+and' = bin "and"
 
 or' :: Expr -> Expr -> Expr
-or' a b = call "or" [a, b]
+or' = bin "or"
+
+implies :: Expr -> Expr -> Expr
+implies = bin "implies"
 
 goodbye :: Expr
 goodbye = call "good-bye" []
 
 mod' :: Expr -> Expr -> Expr
-mod' a b = call "mod" [a, b]
+mod' = bin "mod"
 
 assoc :: Expr -> Expr -> Expr
-assoc a b = call "assoc" [a, b]
-
+assoc = bin "assoc"
 
