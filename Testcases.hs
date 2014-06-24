@@ -57,7 +57,7 @@ basicTests =
 
 intrinsicTest :: Def ('[] :-> ())
 intrinsicTest = proc "intrinsicTest" $ body $ do
-  assert true
+  assert $ true
   assert $ iNot false
   assert $ 1 + 2 ==? (3 :: Sint32)
   assert $ iNot $ 1 + 2 ==? (4 :: Sint32)

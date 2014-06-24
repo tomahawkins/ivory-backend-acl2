@@ -83,9 +83,16 @@ sExpr a = case a of
 check :: [Expr] -> IO Bool
 check a = do
   exe <- savedACL2
-  putStrLn code
+  --putStrLn code
   (_, result, _) <- readProcessWithExitCode exe [] code
-  return $ not $ any (isPrefixOf "ACL2 Error") $ lines result
+  ----putStrLn result
+  let pass = not $ any (isPrefixOf "ACL2 Error") $ lines result
+  if not pass
+    then do
+      putStrLn code
+      putStrLn result
+    else return ()
+  return pass
   where
   code = unlines $ map show a
   savedACL2 :: IO FilePath

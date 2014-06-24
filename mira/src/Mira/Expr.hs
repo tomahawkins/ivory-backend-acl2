@@ -139,7 +139,7 @@ intrinsicACL2 a arg = case a of
 exprACL2 :: Expr -> A.Expr
 exprACL2 a = case a of
   Var a -> var a
-  Literal a -> lit $ show a
+  Literal a -> lit $ showLit a
   -- Deref       Expr
   -- Alloc
   Array       a   -> list $ map exprACL2 a

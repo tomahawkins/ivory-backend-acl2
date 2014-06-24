@@ -17,8 +17,44 @@ verifyProc :: Proc -> IO Bool
 verifyProc (Proc name args _ requires ensures body) = do
   printf "Verifying procedure %s ..." name
   hFlush stdout
-  a <- check $ (:[]) $ thm $ implies (foldl and' t $ map exprACL2 requires) t
+  a <- verifyAssertions 0 (implies (foldl and' t $ map bool requires)) body
   printf "\n"
   return a
-  where
+
+bool :: C.Expr -> Expr
+bool = not' . zip' . exprACL2
+
+checkThm :: Expr -> IO Bool
+checkThm a = check [thm a]
+
+verifyAssertions :: Int -> (Expr -> Expr) -> [Stmt] -> IO Bool
+verifyAssertions nextId body stmts = case stmts of
+  [] -> return True
+  stmt : stmts -> case stmt of
+    Assert a -> do
+      pass <- checkThm $ body a'
+      if pass
+        then verifyAssertions nextId (body . implies a') stmts
+        else do
+          putStrLn $ "Assertion failed: " ++ show a
+          verifyAssertions nextId body stmts
+          return False
+      where
+      a' = bool a
+    Assume a -> verifyAssertions nextId (body . implies (bool a)) stmts
+    Null     -> verifyAssertions nextId body stmts
+    Return _ -> verifyAssertions nextId body stmts
+    Block  a -> verifyAssertions nextId body $ a ++ stmts
+    _ -> error $ "Unsupported statement: " ++ show stmt
+
+    {-
+    Call   Nothing a b  -> printf "%s(%s)\n" a (intercalate ", " $ map show b)
+    Call   (Just c) a b -> printf "%s = %s(%s)\n" c a (intercalate ", " $ map show b)
+    If     a b c        -> printf "if (%s)\n" (show a) ++ indent (concatMap show b) ++ "\nelse\n" ++ indent (concatMap show c)
+    Let    a b          -> printf "let %s = %s\n" a $ show b
+    Store  a b          -> printf "store %s = %s\n" (show a) (show b)
+    Loop   a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
+    -}
+
+
 
