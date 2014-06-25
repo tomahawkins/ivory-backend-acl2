@@ -21,15 +21,16 @@ library
   exposed-modules:
     Mira
     Mira.ACL2
+    --Mira.ACL2ConvertCLL
     Mira.ACL2ConvertCPS
-    Mira.ACL2ConvertRTL
+    --Mira.ACL2ConvertRTL
     Mira.CLL
     Mira.CPS
     Mira.CPSConvert
     Mira.Expr
     Mira.RecTopoSort
-    Mira.RTL
-    Mira.RTLConvert
+    --Mira.RTL
+    --Mira.RTLConvert
     Mira.Verify
   hs-source-dirs: src
   ghc-options: -W

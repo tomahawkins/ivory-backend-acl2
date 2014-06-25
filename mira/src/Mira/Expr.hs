@@ -53,7 +53,6 @@ data Expr
   = Var         Var
   | Literal     Literal
   | Deref       Expr
-  | Alloc
   | Array       [Expr]
   | Struct      [(Var, Expr)]
   | ArrayIndex  Expr Expr
@@ -65,7 +64,6 @@ instance Show Expr where
     Var         a    -> a
     Literal     a    -> show a
     Deref       a    -> printf "(deref %s)" $ show a
-    Alloc            -> printf "alloc"
     Array       a    -> printf "array [%s]"  $ intercalate ", " $ map show a
     Struct      a    -> printf "struct {%s}" $ intercalate ", " [ printf "%s: %s" n (show v) | (n, v) <- a ] 
     ArrayIndex  a b  -> printf "(%s[%s])" (show a) (show b)
@@ -140,8 +138,7 @@ exprACL2 :: Expr -> A.Expr
 exprACL2 a = case a of
   Var a -> var a
   Literal a -> lit $ showLit a
-  -- Deref       Expr
-  -- Alloc
+  Deref _ -> error $ "Deref not supported yet."
   Array       a   -> list $ map exprACL2 a
   Struct      a   -> list [ cons (string a) (exprACL2 b) | (a, b) <- a ]
   ArrayIndex  a b -> nth (exprACL2 b) (exprACL2 a)

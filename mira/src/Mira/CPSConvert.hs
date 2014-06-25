@@ -52,6 +52,7 @@ cpsStmts a cont = case a of
       C.Assert a   -> cpsExpr a $ \ a -> return $ Assert a cont
       C.Assume a   -> cpsExpr a $ \ a -> return $ Assume a cont
       C.Let    a b -> cpsExpr b $ \ b -> return $ Let a (Var b) cont
+      C.Alloc  a   -> return $ Let a Alloc cont
       C.Store  a b -> cpsExpr a $ \ a -> cpsExpr b $ \ b -> return $ Store a b cont
       C.Call Nothing fun args -> f [] args
         where
@@ -98,7 +99,7 @@ cpsExpr a k = do
     C.Var a     -> k a
     C.Literal a -> f $ Literal a
     C.Deref   a -> cpsExpr a $ \ a -> f $ Deref a
-    C.Alloc     -> f Alloc
+    --C.Alloc     -> f Alloc
     C.Array  items  -> cpsExprs items $ \ items -> f $ Array items
     C.Struct fields -> cpsExprs (snd $ unzip fields) $ \ values -> f $ Struct $ zip (fst $ unzip fields) values
     C.ArrayIndex  a b -> cpsExpr a $ \ a -> cpsExpr b $ \ b -> f $ ArrayIndex  a b

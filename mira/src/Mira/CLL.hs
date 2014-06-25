@@ -32,6 +32,7 @@ data Stmt
   | Assert Expr
   | Assume Expr
   | Let    Var Expr
+  | Alloc  Var
   | Store  Expr Expr
   | Loop   Var Expr Bool Expr [Stmt]
   | Block  [Stmt]
@@ -47,6 +48,7 @@ instance Show Stmt where
     Assert a            -> printf "assert %s\n" $ show a
     Assume a            -> printf "assume %s\n" $ show a
     Let    a b          -> printf "let %s = %s\n" a $ show b
+    Alloc  a            -> printf "alloc %s\n" a
     Store  a b          -> printf "store %s = %s\n" (show a) (show b)
     Loop   a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
     Block  a            -> concatMap show a

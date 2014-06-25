@@ -1,7 +1,37 @@
 module Mira
-  ( compile
+  ( verifyTermination
+  , verifyAssertions
   ) where
 
+import System.Environment
+
+import Mira.CLL
+import Mira.CPS hiding (Proc)
+import Mira.CPSConvert
+import Mira.Verify
+import Mira.ACL2 (check)
+import Mira.ACL2ConvertCPS
+
+-- | Verifies termination of a module.
+verifyTermination :: [Proc] -> IO Bool
+verifyTermination cll = do
+  acl2Sources <- acl2Sources
+  let acl2 = acl2ConvertCPS acl2Sources $ map (removeNullEffect . removeAsserts . commonSubExprElim) $ cpsConvert cll
+  writeFile "test.lisp" $ unlines $ map show acl2
+  check acl2
+
+-- | Verifies assertions and pre/post conditions of procedures in a module.
+verifyAssertions :: [Proc] -> IO Bool
+verifyAssertions = verifyProcs
+
+acl2Sources :: IO FilePath
+acl2Sources = do
+  env <- getEnvironment
+  case lookup "ACL2_SOURCES" env of
+    Nothing -> error "Environment variables ACL2_SOURCES not found."
+    Just a  -> return a
+
+{-
 import System.Environment
 
 import Mira.CLL hiding (Expr)
@@ -30,4 +60,5 @@ compile name cll = do
   rtl     = rtlConvert        cps2
   acl2CPS a = acl2ConvertCPS a    cps2
   acl2RTL = acl2ConvertRTL    rtl 
+-}
 

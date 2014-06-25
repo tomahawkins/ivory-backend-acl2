@@ -10,50 +10,12 @@
 
 module Main (main) where
 
+import System.Environment
+
 import Ivory.Language
 import Ivory.Compile.ACL2
 
 type Stmt = forall s . Ivory (ProcEffects s ()) ()
-
--- A collection of some basic tests.
-basicTests :: [(Bool, Module)]
-basicTests =
-  [ basicTest "basic00"   True  $ assert true
-  , basicTest "basic01"   False $ assert false
-  , basicTest "basic02"   True  $ assert $ 1 + 2 ==? (3 :: Sint32)
-  , basicTest "basic03"   False $ assert $ 1 + 2 ==? (4 :: Sint32)
-  , basicTest "basic04"   True  $ assert $ 3 - 2 ==? (1 :: Sint32)
-  , basicTest "basic05"   False $ assert $ 2 - 2 ==? (1 :: Sint32)
-  , basicTest "basic0501" True  $ assert $ 1 /=? (2 :: Sint32)
-  , basicTest "basic0502" False $ assert $ 1 /=? (1 :: Sint32)
-  , basicTest "basic0503" True  $ assert $ 1 <?  (2 :: Sint32)
-  , basicTest "basic0504" True  $ assert $ 3 >?  (2 :: Sint32)
-  , basicTest "basic0505" True  $ assert $ 1 <=? (1 :: Sint32)
-  , basicTest "basic0506" True  $ assert $ 3 >=? (3 :: Sint32)
-  , basicTest "basic06"   True  $ assert $ iNot false
-  , basicTest "basic07"   True  $ assert $ iNot $ iNot true
-  , basicTest "basic08"   False $ assert $ iNot $ iNot false
-  , basicTest "basic09"   False $ assert $ iNot $ iNot $ iNot true
-  , basicTest "basic10"   True  $ assert $ (false .&& false) ==? false
-  , basicTest "basic11"   True  $ assert $ (false .&& true ) ==? false
-  , basicTest "basic12"   True  $ assert $ (true  .&& false) ==? false
-  , basicTest "basic13"   True  $ assert $ (true  .&& true ) ==? true 
-  , basicTest "basic14"   True  $ assert $ (false .|| false) ==? false
-  , basicTest "basic15"   True  $ assert $ (false .|| true ) ==? true
-  , basicTest "basic16"   True  $ assert $ (true  .|| false) ==? true
-  , basicTest "basic17"   True  $ assert $ (true  .|| true ) ==? true 
-  , basicTest "basic18"   True  $ assert $ true  ? (true , false)
-  , basicTest "basic19"   True  $ assert $ true  ? (true , true )
-  , basicTest "basic20"   True  $ assert $ false ? (false, true )
-  , basicTest "basic21"   True  $ assert $ false ? (true , true )
-  , basicTest "basic22"   True  $ assert $ (3 .% 7) ==? (3 :: Sint32)
-  , basicTest "basic23"   True  $ assert $ negate 3 ==? (-3 :: Sint32)
-  , basicTest "basic24"   True  $ assert $ abs (-3) ==? (3 :: Sint32)
-  , basicTest "basic25"   True  $ assert $ signum 0 ==? (0 :: Sint32)
-  ]
-  where
-  basicTest :: String -> Bool -> Stmt -> (Bool, Module)
-  basicTest name expected a = (expected, package name $ incl $ proc "main" $ body $ a >> retVoid)
 
 intrinsicTest :: Def ('[] :-> ())
 intrinsicTest = proc "intrinsicTest" $ body $ do
@@ -89,6 +51,9 @@ intrinsicTest = proc "intrinsicTest" $ body $ do
   assert $ negate 3 ==? (-3 :: Sint32)
   assert $ abs (-3) ==? (3 :: Sint32)
   assert $ signum 0 ==? (0 :: Sint32)
+  -- A test of assumptions.
+  assume false
+  assert false
   retVoid
 
 -- Factorial of a number.
@@ -154,12 +119,12 @@ structTest = proc "structTest" $ body $ do
   ret a
 
 arrayTest :: Def ('[] :-> Uint32)
-arrayTest = proc "arrayTest" $ body $ do
+arrayTest = proc "arrayTest" $ {- ensures (.= 6) $ -} body $ do
   -- Allocate a 4 element array with zeros: [0, 0, 0, 0]
   (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 1
 
   -- Iterate over the array making it: [0, 1, 2, 3]
-  --arrayMap $ \ i -> store (array ! i) $ safeCast i  --XXX Having both this loop and the loop below gives ACL2 troubles.
+  arrayMap $ \ i -> store (array ! i) $ safeCast i  --XXX Having both this loop and the loop below gives ACL2 troubles.
 
   -- Create a reference to sum the elements in the array.
   sum <- local $ ival (0 :: Uint32)
@@ -170,39 +135,25 @@ arrayTest = proc "arrayTest" $ body $ do
     m <- deref $ array ! i
     store sum $ n + m
 
+  assert true
+
   -- Return the computed sum.
   deref sum >>= ret
 
 
--- A list of all testcases.
-allTests :: [(Bool, Module)]
-allTests = concat
-  [ basicTests
-  , factorialTests
-  ]
-
 main :: IO ()
 main = do
-  --putStrLn "Basic tests:"
-  --result <- verifyModules allTests
-  --if result
-  --  then putStrLn "Tests passed."
-  --  else putStrLn "Tests failed."
+  test "termination: intrinsicTest" $ verifyTermination $ package "intrinsicTest" $ incl intrinsicTest
+  test "termination: factorial"     $ verifyTermination $ package "factorial"     $ incl factorial
+  test "termination: loopTest"      $ verifyTermination $ package "loopTest"      $ incl loopTest
+  test "termination: arrayTest"     $ verifyTermination $ package "arrayTest"     $ incl arrayTest
+  --test "assertions: intrinsicTest"  $ verifyAssertions  $ package "intrinsicTest" $ incl intrinsicTest
+  --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
 
-  --putStrLn "Termination tests:"
-  --verifyTermination' "factorial" $ incl factorial
-  --verifyTermination' "loopTest" $ incl loopTest
-  --verifyTermination' "infiniteRecursionTest" $ incl infiniteRecursionTest
-  --verifyTermination' "arrayTest" $ incl arrayTest
-  --verifyTermination' "structTest" $ do
-  --  defStruct (Proxy :: Proxy "Foo")
-  --  --defStruct (Proxy :: Proxy "Bar")
-  --  incl structTest
-
-  verifyAssertions $ package "intrinsicTest" $ incl intrinsicTest
-  where
-  verifyTermination' name a =  do
-    pass <- verifyTermination $ package name $ a
-    putStrLn $ name ++ " terminates: " ++ (if pass then "pass" else "FAIL")
-
+test :: String -> IO Bool -> IO ()
+test name action = do
+  pass <- action
+  if pass
+    then putStrLn $ "pass: " ++ name
+    else putStrLn $ "FAIL: " ++ name
 

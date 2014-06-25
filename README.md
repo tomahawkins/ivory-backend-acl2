@@ -200,8 +200,8 @@ Name           | Description                                         | Implement
 ---------------|-----------------------------------------------------|-------------|----------
 IfTE           | If-then-else.                                       | X           | factorialTests
 Return         | Return from a function call with an optional value. | X           | factorialTests
-Assert         | User assertions.                                    | X           | basicTests
-Assume         | User assumptions.                                   | X           |          
+Assert         | User assertions.                                    | X           | intrinsicTest
+Assume         | User assumptions.                                   | X           | intrinsicTest
 CompilerAssert | Compiler generated assertions.                      | X           | loopTest
 Local          | Local variable introduction.                        | X           | factorialTests
 Call           | Function calls.                                     | X           | factorialTests
@@ -218,10 +218,10 @@ RefCopy        |                                                     |          
 
 Name            | Description                                     | Implemented | Testcase
 ----------------|-------------------------------------------------|-------------|----------
-ExpSym          | Symbols.                                        | X           | basicTests
-ExpVar          | Variables.                                      | X           | basicTests
-ExpLiteral      | Liternal constants.                             | X           | basicTests
-ExpExpOp        | Intrinsic (operator) application.               | X           | basicTests
+ExpSym          | Symbols.                                        | X           | intrinsicTest
+ExpVar          | Variables.                                      | X           | intrinsicTest
+ExpLiteral      | Liternal constants.                             | X           | intrinsicTest
+ExpExpOp        | Intrinsic (operator) application.               | X           | intrinsicTest
 ExpIndex        | Array indexing.                                 | X           | structArrayTest
 ExpLabel        | Structure label indexing.                       | X           | structArrayTest
 ExpSafeCast     | Type casting.                                   | X           | arrayTest
@@ -230,21 +230,21 @@ ExpSafeCast     | Type casting.                                   | X           
 
 Name              | Implemented | Testcase
 ------------------|-------------|---------
-ExpEq             | X           | basicTests
-ExpNeq            | X           | basicTests
-ExpCond           | X           | basicTests
-ExpGt             | X           | basicTests
-ExpLt             | X           | basicTests
-ExpNot            | X           | basicTests
-ExpAnd            | X           | basicTests
-ExpOr             | X           | basicTests
+ExpEq             | X           | intrinsicTest
+ExpNeq            | X           | intrinsicTest
+ExpCond           | X           | intrinsicTest
+ExpGt             | X           | intrinsicTest
+ExpLt             | X           | intrinsicTest
+ExpNot            | X           | intrinsicTest
+ExpAnd            | X           | intrinsicTest
+ExpOr             | X           | intrinsicTest
 ExpMul            | X           | factorialTests
-ExpMod            | X           | basicTests
-ExpAdd            | X           | basicTests
-ExpSub            | X           | basicTests
-ExpNegate         | X           | basicTests
-ExpAbs            | X           | basicTests
-ExpSignum         | X           | basicTests
+ExpMod            | X           | intrinsicTest
+ExpAdd            | X           | intrinsicTest
+ExpSub            | X           | intrinsicTest
+ExpNegate         | X           | intrinsicTest
+ExpAbs            | X           | intrinsicTest
+ExpSignum         | X           | intrinsicTest
 ExpDiv            |             |
 ExpRecip          |             |
 ExpFExp           |             |
