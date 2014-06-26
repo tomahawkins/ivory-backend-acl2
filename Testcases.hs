@@ -10,12 +10,11 @@
 
 module Main (main) where
 
-import System.Environment
-
 import Ivory.Language
 import Ivory.Compile.ACL2
+import qualified Mira.ACL2 as A
 
-type Stmt = forall s . Ivory (ProcEffects s ()) ()
+--type Stmt = forall s . Ivory (ProcEffects s ()) ()
 
 intrinsicTest :: Def ('[] :-> ())
 intrinsicTest = proc "intrinsicTest" $ body $ do
@@ -65,26 +64,6 @@ factorial  = proc "factorial" $ \ n -> body $
    )
    (do ret n)
   
--- Tests of calling the factorial function.
-factorialTests :: [(Bool, Module)]
-factorialTests =
-  [ factorialTest "factorial1" True $ do
-      a <- call factorial 1
-      assert $ a ==? 1
-  , factorialTest "factorial2" True $ do
-      a <- call factorial 2
-      assert $ a ==? 2
-  ]
-  where
-  factorialTest :: String -> Bool -> Stmt -> (Bool, Module)
-  factorialTest name expected a = (expected, m)
-    where
-    m = package name $ do
-      incl factorial
-      incl $ proc "main" $ body $ do
-        a
-        retVoid
-
 -- A test of loops and arrays.
 loopTest :: Def ('[Ix 10] :-> Uint32)
 loopTest = proc "loopTest" $ \ix ->
@@ -97,19 +76,13 @@ loopTest = proc "loopTest" $ \ix ->
      store ref (n+1)
    ret =<< deref ref
 
--- A termination test of infinite recursion.
-infiniteRecursionTest :: Def ('[] :-> Uint32)
-infiniteRecursionTest = proc "callForever" $ body $ do
-  call infiniteRecursionTest
-  ret 0
-
 --struct Foo { i    :: Stored Uint32 }
 --[ivory|
 --struct Bar { name :: Array 32 (Stored Uint32) }
 -- |]
 [ivory|
 struct Foo { i :: Stored Uint32 }
-struct Bar { name :: Array 32 (Stored Uint32) }
+--struct Bar { name :: Array 32 (Stored Uint32) }
 |]
 
 structTest :: Def ('[] :-> Uint32)
@@ -143,17 +116,19 @@ arrayTest = proc "arrayTest" $ {- ensures (.= 6) $ -} body $ do
 
 main :: IO ()
 main = do
-  test "termination: intrinsicTest" $ verifyTermination $ package "intrinsicTest" $ incl intrinsicTest
-  test "termination: factorial"     $ verifyTermination $ package "factorial"     $ incl factorial
-  test "termination: loopTest"      $ verifyTermination $ package "loopTest"      $ incl loopTest
-  test "termination: arrayTest"     $ verifyTermination $ package "arrayTest"     $ incl arrayTest
-  --test "assertions: intrinsicTest"  $ verifyAssertions  $ package "intrinsicTest" $ incl intrinsicTest
+  test "assertions: intrinsicTest"  $ verifyAssertions  $ package "intrinsicTest" $ incl intrinsicTest
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
+  testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
+  testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
+  testThm "loopTest  8 ==  8" loopTest   $ A.equal  8 $ A.cdr $ A.call "loopTest"   [A.nil, 8]
+  testThm "structTest  == 22" structTest $ A.equal 22 $ A.cdr $ A.call "structTest" [A.nil]
+  where
+  testThm name func thm = test name $ A.check $ compile (package name $ incl func) ++ [A.thm thm]
 
-test :: String -> IO Bool -> IO ()
-test name action = do
-  pass <- action
-  if pass
-    then putStrLn $ "pass: " ++ name
-    else putStrLn $ "FAIL: " ++ name
+  test :: String -> IO Bool -> IO ()
+  test name action = do
+    pass <- action
+    if pass
+      then putStrLn $ "pass: " ++ name
+      else putStrLn $ "FAIL: " ++ name
 

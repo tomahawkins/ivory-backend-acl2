@@ -25,10 +25,4 @@ mira/dist/setup-config: mira/src/Mira.hs mira/src/Mira/*.hs
 clean:
 	cd mira               && cabal clean
 	cd ivory-backend-acl2 && cabal clean
-	-rm *.cll
-	-rm *.cps1
-	-rm *.cps2
-	-rm *.rtl
-	-rm *.lisp
-	-rm *.log
 

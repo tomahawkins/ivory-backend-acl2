@@ -215,10 +215,17 @@ commonSubExprElim (Proc name args measure body) = Proc name args measure $ elim 
     Let    a b c -> case b' of
       Var b -> elim env ((a, b) : vars) c
       _ -> case lookup b' env of
-        Nothing -> Let a b' $ elim ((b', a) : env) vars c
+        Nothing -> Let a b' $ elim env' vars c
         Just a' ->            elim env ((a, a') : vars) c
       where
       b' = value b
+      env' = if stateful then env else (b', a) : env
+      stateful :: Bool
+      stateful = case b' of
+        Pop -> True
+        Alloc -> True
+        _ -> False
+        
     Store  a b c -> Store (var a) (var b) $ elim' c
     If     a b c -> If (var a) (elim' b) (elim' c)
     Assert a b   -> Assert (var a) $ elim' b

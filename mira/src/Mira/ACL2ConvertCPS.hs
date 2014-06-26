@@ -13,8 +13,8 @@ import Mira.RecTopoSort
 
 type CN = StateT (Int, [Expr]) Id
 
-acl2ConvertCPS :: FilePath -> [Proc] -> [Expr]
-acl2ConvertCPS acl2Sources procs = opts ++ mutualRecGroups
+acl2ConvertCPS :: [Proc] -> [Expr]
+acl2ConvertCPS procs = opts ++ mutualRecGroups
   where
   ((), (_, funs)) = runId $ runStateT (0, []) $ mapM_ proc procs
   opts =

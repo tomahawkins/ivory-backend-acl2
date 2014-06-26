@@ -1,35 +1,38 @@
 module Mira
   ( verifyTermination
   , verifyAssertions
+  , compile
   ) where
 
-import System.Environment
+--import System.Environment
 
-import Mira.CLL
+import Mira.CLL hiding (Expr)
 import Mira.CPS hiding (Proc)
 import Mira.CPSConvert
 import Mira.Verify
-import Mira.ACL2 (check)
+import Mira.ACL2 (check, Expr)
 import Mira.ACL2ConvertCPS
 
 -- | Verifies termination of a module.
 verifyTermination :: [Proc] -> IO Bool
-verifyTermination cll = do
-  acl2Sources <- acl2Sources
-  let acl2 = acl2ConvertCPS acl2Sources $ map (removeNullEffect . removeAsserts . commonSubExprElim) $ cpsConvert cll
-  writeFile "test.lisp" $ unlines $ map show acl2
-  check acl2
+verifyTermination cll = check $ compile cll
+
+-- | Compile an CLL procedures to ACL2.
+compile :: [Proc] -> [Expr]
+compile cll = acl2ConvertCPS $ map (removeNullEffect . removeAsserts . commonSubExprElim) $ cpsConvert cll
 
 -- | Verifies assertions and pre/post conditions of procedures in a module.
 verifyAssertions :: [Proc] -> IO Bool
 verifyAssertions = verifyProcs
 
+{-
 acl2Sources :: IO FilePath
 acl2Sources = do
   env <- getEnvironment
   case lookup "ACL2_SOURCES" env of
     Nothing -> error "Environment variables ACL2_SOURCES not found."
     Just a  -> return a
+-}
 
 {-
 import System.Environment

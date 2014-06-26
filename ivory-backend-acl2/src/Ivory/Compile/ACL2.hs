@@ -2,11 +2,13 @@
 module Ivory.Compile.ACL2
   ( verifyTermination
   , verifyAssertions
+  , compile
   ) where
 
 import qualified Mira as M
 import Mira.CLL as C
 import Mira.Expr
+import qualified Mira.ACL2 as A
 
 import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Language.Syntax.AST (Module (..), ExpOp (..))
@@ -15,11 +17,15 @@ import qualified Ivory.Language.Syntax.Names as I
 
 -- | Verifies termination of a module.
 verifyTermination :: Module -> IO Bool
-verifyTermination m = M.verifyTermination $ cllModule m
+verifyTermination = M.verifyTermination . cllModule
 
 -- | Verifies assertions and pre/post conditions of procedures in a module.
 verifyAssertions :: Module -> IO Bool
-verifyAssertions m = M.verifyAssertions $ cllModule m
+verifyAssertions = M.verifyAssertions . cllModule
+
+-- | Compiles an Ivory module to ACL2.
+compile :: Module -> [A.Expr]
+compile = M.compile . cllModule
 
 -- | Convert an Ivory module to CLL.
 cllModule :: Module -> [C.Proc]
