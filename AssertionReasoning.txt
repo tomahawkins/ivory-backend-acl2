@@ -1,0 +1,215 @@
+Interprocedural Assertion Verification for Ivory Compiler
+
+Goals
+
+Build an analyzer that can verify most assertions in a reasonable amount of time
+for the compiler to remove as many runtime checks as possible.
+
+Provide a hook for Ivory compiler that verifies and removes assertions and
+reports assertions that failed to verify:
+
+  -- A verification failure to report.
+  data Report
+    = FailedToVerifyAssert Module Proc Stmt
+    | FailedToVerifyEnsure Module Proc Ensure 
+    | FailedToVerifyRequireAtCallSite Module Proc Require Module Proc Stmt
+
+  -- Given a reporting function 
+  verifyAndRemoveAssertions :: (Report -> IO ()) -> [Module] -> IO [Module]
+
+
+
+
+Prior Assertions as Lemmas
+
+An assertion will use all prior assertions as lemmas, regardless if they
+have been proven or not.  But an assertion will not use any post assertions
+as lemmas as this could establish a cycle that could allow false assertions
+to be incorrectly verified.  For example assume we had:
+
+  assert false  -- Assertion 1.
+  assert false  -- Assertion 2.
+
+If we use all assertions as lemmas, this leads to the following
+proposition for verification:
+
+  Assertion 1: assert2 -> assert1
+  Assertion 2: assert1 -> assert2
+
+Since both assertions are false, both are incorrectly verified
+and removed from the runtime.  Using only prior assertions breaks
+this loop.  Now the propositions look this this:
+
+  Assertion 1: assert1
+  Assertion 2: assert1 -> assert2
+
+In this case, assertion 1 fails to prove and remains a runtime check.
+(More importantly, the verifier reports a proof failure and the user fixes the bug.)
+Assertion 2 passes, but only because assertion 1 is false.  Assertion 2
+is removed from the runtime, but this tolerable since the assertion 1 check remains.
+
+It may be possible to use a different ordering scheme other than declaration order
+for lemma assisted proofs, but this will not be explored.
+
+
+
+
+Procedural Abstraction
+
+When a function is called, the analyzer must handle the cases when:
+  - the function does or does not have interface contracts, i.e. requires and ensures
+  - the function is either recursive or mutually recursive with other functions
+  - the function is mutually recursive with the caller
+
+If a function being called is not recursive nor has
+any recursive sub-calls, the function's body can be inlined
+by the analyzer.  This would be especially helpful
+for the cases of analyzer generated functions, such as for loops
+where Ivory does not have the ability to specify contracts
+(maybe Ivory should have means to specify entry and exit conditions for loops).
+For simplicity of implementation, the analyzer will not
+do any inlining and will not look inside any functions called
+beyond the interface contracts.
+
+If a callee has an input contract, the contract
+will be applied to the arguments and checked like an assertion.
+If the input contract can be verified at every call site, the input
+contract can be removed from the callee.  (Care must be taken for recursion.)
+
+If a callee has an output contract, this will be
+treated as a lemma for following assertions in the callers body.
+During verification of the callee, the output contract will be 
+treated like an assertion.  If it is verified the output contract
+can be removed.
+
+If a callee does not have an output contract, the analyzer
+will treat the return value and the global program state as
+free variables, i.e. universally quantified.
+
+
+
+
+Example
+
+function f1 (a, b, c) {
+  requires f1_requires
+  ensures  f1_ensures
+  ...
+}
+
+function f2 (a, b) {     -- Arguments translated to an environment record: let Env = [(a, value), (b, value)] :: [(Name, Value)]
+  requires f2_requires   -- Requires translated to a predicate on the state and environment: (State, Env) -> Bool
+  ensures  f2_ensures    -- Ensures translated to a predicate on the state, environment, and return value: (State, Env, Value) -> Bool
+  stmts1                 -- Statements transform state and environment: (State, Env) -> (State, Env)
+  assert assert1         -- Assert expressions translated to predicate on state and environment: (State, Env) -> Bool
+  stmts2
+  assert assert2
+  stmts3
+  let tmp = f1 (arg1, arg2, arg3)
+  stmts4
+  assert assert3
+  stmts5
+  return ret
+}
+
+VC for assert1:
+
+  forall state0 a b .
+    let env0 = [("a", a), ("b", b)]
+    let (state1, env1) = stmts1 (state0, env0)
+    let vc1 = f2_requires (state0, env0) -> assert1 (state1, env1)
+    vc1
+
+VC for assert2:
+
+  forall state0 a b .
+    let env0 = [("a", a), ("b", b)]
+    let (state1, env1) = stmts1 (state0, env0)
+    let (state2, env2) = stmts2 (state1, env1)
+    let vc1 = f2_requires (state0, env0) -> assert1 (state1, env1)
+    let vc2 = vc1 -> assert2 (state2, env2)
+    vc2
+
+VC for f1_requires:
+
+  forall state0 a b .
+    let env0 = [("a", a), ("b", b)]
+    let (state1, env1) = stmts1 (state0, env0)
+    let (state2, env2) = stmts2 (state1, env1)
+    let (state3, env3) = stmts3 (state2, env2)
+    let vc1 = f2_requires (state0, env0) -> assert1 (state1, env1)
+    let vc2 = vc1 -> assert2 (state2, env2)
+    let callenv = [("a", env3["arg1"]) , ("b", env3["arg2"]) , ("c", env3["arg3"])]
+    let vc3 = vc2 -> f1_requires (state3, callenv)
+    vc3
+
+VC for assert3:
+
+  forall state0 a b .
+    let env0 = [("a", a), ("b", b)]
+    let (state1, env1) = stmts1 (state0, env0)
+    let (state2, env2) = stmts2 (state1, env1)
+    let (state3, env3) = stmts3 (state2, env2)
+    let vc1 = f2_requires (state0, env0) -> assert1 (state1, env1)
+    let vc2 = vc1 -> assert2 (state2, env2)
+    let envCall = [("a", env3["arg1"]) , ("b", env3["arg2"]) , ("c", env3["arg3"])]
+    let vc3 = vc2 -> f1_requires (state3, envCall)
+    forall stateCall tmp .
+      let (state4, env4) = stmts4 (stateCall, env3)
+      let vc4 = vc3 -> f1_ensure (stateCall, envCall, tmp) -> assert (state4, env4)        -- XXX How does Ivory capture state changes in ensures?
+      vc4
+
+VC for f2_ensures:
+
+  forall state0 a b .
+    let env0 = [("a", a), ("b", b)]
+    let (state1, env1) = stmts1 (state0, env0)
+    let (state2, env2) = stmts2 (state1, env1)
+    let (state3, env3) = stmts3 (state2, env2)
+    let vc1 = f2_requires (state0, env0) -> assert1 (state1, env1)
+    let vc2 = vc1 -> assert2 (state2, env2)
+    let envCall = [("a", env3["arg1"]) , ("b", env3["arg2"]) , ("c", env3["arg3"])]
+    let vc3 = vc2 -> f1_requires (state3, envCall)
+    forall stateCall tmp .
+      let (state4, env4) = stmts4 (stateCall, env3)
+      let vc4 = vc3 -> f1_ensures (stateCall, envCall, tmp) -> assert (state4, env4)
+      let (state5, env5) = stmts5 (state4, env4)
+      let vc5 = vc4 -> f2_ensures (state5, env5, env5["ret"])
+
+
+
+
+Recursion
+
+I think the above scheme will work with recursion.  To safely remove input contracts,
+all call sites, including recursive ones, must be verified.
+
+
+
+
+If Statements and Loop
+
+If statements and loops are the two places in the analysis that produce
+generated functions.  A body of a loop is converted into a recursive function
+(terminates based on loop iteration) and code after an If statement is
+converted to a function that is called at the end of both branches of the conditional.
+How should these generated functions be handled?  Unless loop
+a loop occurs at the beginning or end of a function, it will not
+have any interface contracts.  However, post If statement generated
+functions can use the enclosing function's output contract if one exists.
+
+
+
+
+
+Misc Items
+
+Providing the compiler with 'verifyAndRemoveAssertions' assumes
+the analyzer can handle, not necessary analyze, all possible Ivory code.
+In its current from, the Ivory-to-ACL2 compiler errors out
+whenever it comes across an program construct that is not
+supported.  With verification at compile time, these errors
+will have to be handled without throwing an exception.
+It will take some effort to make the code base robust to all inputs.
+
+
