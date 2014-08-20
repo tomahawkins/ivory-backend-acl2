@@ -2,8 +2,8 @@ module Mira.Verify
   ( verifyAssertion
   ) where
 
-import System.IO
-import Text.Printf
+--import System.IO
+--import Text.Printf
 
 import Mira.ACL2
 import qualified Mira.CLL as C

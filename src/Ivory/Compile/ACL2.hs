@@ -12,45 +12,21 @@ import qualified Ivory.Language.Syntax.AST   as I
 import qualified Ivory.Language.Syntax.Type  as I
 import qualified Ivory.Language.Syntax.Names as I
 
--- | Verifies an assertion in a procedure.
-verifyAssertion :: [I.Module] -> I.Sym -> I.Stmt -> IO Bool
-verifyAssertion modules procName assertion = M.verifyAssertion procs
-  where
-  procs :: [M.Proc]
-  procs = concatMap (cllModule $ Just (procName, assertion)) modules
-
--- | Verify and remove assertions in an Ivory program.
-removeVerifiedAssertions :: [I.Module] -> IO [I.Module]
-removeVerifiedAssertions modules = mapM analyzeModule modules
-  where
-  analyzeModule :: I.Module -> IO I.Module
-  analyzeModule m = do
-    pub <- mapM analyzeProc $ I.public  $ I.modProcs m
-    pri <- mapM analyzeProc $ I.private $ I.modProcs m
-    return m { I.modProcs = I.Visible pub pri }
-
-  analyzeProc :: I.Proc -> IO I.Proc
-  analyzeProc = return  --XXX
-
 -- | Compiles an Ivory module to ACL2.
 compile :: I.Module -> [A.Expr]
-compile = M.compile . cllModule Nothing
+compile = M.compile . cllModule
 
 -- | Convert an Ivory module to CLL.
-cllModule :: Maybe (I.Sym, I.Stmt) -> I.Module -> [M.Proc]
-cllModule mark = map (cllProc mark) . procs
+cllModule :: I.Module -> [M.Proc]
+cllModule = map cllProc . procs
   where
   procs :: I.Module -> [I.Proc]
   procs m = I.public (I.modProcs m) ++ I.private (I.modProcs m)
   
-cllProc :: Maybe (I.Sym, I.Stmt) -> I.Proc -> M.Proc
-cllProc mark p = M.Proc (I.procSym p) (map (var . I.tValue) $ I.procArgs p) Nothing requires ensures body
+cllProc :: I.Proc -> M.Proc
+cllProc p = M.Proc (I.procSym p) (map (var . I.tValue) $ I.procArgs p) Nothing requires ensures body
   where
-  markStmt :: Maybe I.Stmt
-  markStmt = case mark of
-    Just (procName, stmt) | I.procSym p == procName -> Just stmt
-    _ -> Nothing
-  body = map (cllStmt markStmt) (I.procBody p)
+  body = map cllStmt (I.procBody p)
   requires :: [M.Expr]
   requires = map (cllExpr . cond . I.getRequire) $ I.procRequires p
   ensures :: [M.Expr -> M.Expr]
@@ -73,41 +49,35 @@ cllProc mark p = M.Proc (I.procSym p) (map (var . I.tValue) $ I.procArgs p) Noth
       M.StructIndex a b -> M.StructIndex (retval a) b
       M.Intrinsic a b -> M.Intrinsic a $ map retval b
 
-cllStmt :: Maybe I.Stmt -> I.Stmt -> M.Stmt
-cllStmt mark a = case a of
-  I.IfTE           a b c -> mark' $ M.If (cllExpr a) (cllStmts b) (cllStmts c)
-  I.Return         a     -> mark' $ M.Return $ Just $ cllExpr $ I.tValue a
-  I.ReturnVoid           -> mark' $ M.Return Nothing
-  I.Assert         a     -> mark' $ M.Assert $ cllExpr a
-  I.CompilerAssert a     -> mark' $ M.Assert $ cllExpr a
-  I.Assume         a     -> mark' $ M.Assume $ cllExpr a
-  I.Local          _ a b -> mark' $ M.Let (var a) $ cllInit b
-  I.AllocRef       _ a b -> mark' $ M.Block [M.Alloc $ var a, M.Store (M.Var $ var a) (M.Var $ var b)]
-  I.Deref          _ a b -> mark' $ M.Let   (var a) $ M.Deref $ cllExpr b
-  I.Store          _ a b -> mark' $ M.Store (cllExpr a) (cllExpr b)
+cllStmt :: I.Stmt -> M.Stmt
+cllStmt a = case a of
+  I.IfTE           a b c -> M.If (cllExpr a) (cllStmts b) (cllStmts c)
+  I.Return         a     -> M.Return $ Just $ cllExpr $ I.tValue a
+  I.ReturnVoid           -> M.Return Nothing
+  I.Assert         a     -> M.Assert $ cllExpr a
+  I.CompilerAssert a     -> M.Assert $ cllExpr a
+  I.Assume         a     -> M.Assume $ cllExpr a
+  I.Local          _ a b -> M.Let (var a) $ cllInit b
+  I.AllocRef       _ a b -> M.Block [M.Alloc $ var a, M.Store (M.Var $ var a) (M.Var $ var b)]
+  I.Deref          _ a b -> M.Let   (var a) $ M.Deref $ cllExpr b
+  I.Store          _ a b -> M.Store (cllExpr a) (cllExpr b)
 
-  I.Call   _ Nothing  fun args  -> mark' $ M.Call Nothing        (var fun) $ map (cllExpr . I.tValue) args
-  I.Call   _ (Just r) fun args  -> mark' $ M.Call (Just $ var r) (var fun) $ map (cllExpr . I.tValue) args
-  I.Loop i init incr' body      -> mark' $ M.Loop (var i) (cllExpr init) incr (cllExpr to) (cllStmts body)
+  I.Call   _ Nothing  fun args  -> M.Call Nothing        (var fun) $ map (cllExpr . I.tValue) args
+  I.Call   _ (Just r) fun args  -> M.Call (Just $ var r) (var fun) $ map (cllExpr . I.tValue) args
+  I.Loop i init incr' body      -> M.Loop (var i) (cllExpr init) incr (cllExpr to) (cllStmts body)
     where
     (incr, to) = case incr' of
       I.IncrTo a -> (True, a)
       I.DecrTo a -> (False, a)
 
-  I.Comment _     -> mark' M.Null
+  I.Comment _     -> M.Null
   I.RefCopy _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
   I.Forever _     -> error $ "Unsupported Ivory statement: " ++ show a
   I.Break         -> error $ "Unsupported Ivory statement: " ++ show a
   I.Assign  _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
   where
   cllStmts :: [I.Stmt] -> [M.Stmt]
-  cllStmts = map $ cllStmt mark
-
-  mark' :: M.Stmt -> M.Stmt
-  mark' s = case mark of
-    Just a' | a' == a -> M.Mark s
-    _ -> s
-
+  cllStmts = map cllStmt
 
 cllInit :: I.Init -> M.Expr
 cllInit a = case a of

@@ -118,7 +118,7 @@ main :: IO ()
 main = do
   --mapM_ print $ compile (package "arrayTest" $ incl arrayTest)
 
-  test "assertions: intrinsicTest"  $ verifyAssertions  $ package "intrinsicTest" $ incl intrinsicTest
+  --test "assertions: intrinsicTest"  $ verifyAssertions  $ package "intrinsicTest" $ incl intrinsicTest
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
   testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
   testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]

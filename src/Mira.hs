@@ -1,18 +1,16 @@
 module Mira
-  ( verifyAssertion
-  , compile
+  ( compile
   ) where
 
 --import System.Environment
 
-import Mira.CLL hiding (Expr)
+import Mira.CLL as CLL
 import Mira.CPS hiding (Proc)
 import Mira.CPSConvert
-import Mira.Verify
-import Mira.ACL2 (Expr)
-import Mira.ACL2ConvertCPS
+import Mira.ACL2 as ACL2
+import Mira.ACL2Convert
 
--- | Compile an CLL procedures to ACL2.
-compile :: [Proc] -> [Expr]
-compile cll = acl2ConvertCPS $ map (removeNullEffect . removeAsserts . commonSubExprElim) $ cpsConvert cll
+-- | Compile CLL procedures to ACL2.
+compile :: [CLL.Proc] -> [ACL2.Expr]
+compile cll = acl2Convert $ map (removeNullEffect . removeAsserts . commonSubExprElim) $ cpsConvert cll
 

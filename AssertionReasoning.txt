@@ -181,8 +181,9 @@ VC for f2_ensures:
 
 Recursion
 
-I think the above scheme will work with recursion.  To safely remove input contracts,
-all call sites, including recursive ones, must be verified.
+Q: How can we safely remove input contracts for recursive calls?
+
+Purhaps for now, all input contracts should remain in place.
 
 
 
@@ -231,6 +232,8 @@ function f (a, b) {
     stmts4
   }
 }
+
+To safely remove assertions from stmts4, all instances of stmts4 have to be verify.
 
 Loops could be treated similarly by loop unrolling.
 

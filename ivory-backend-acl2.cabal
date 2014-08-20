@@ -23,13 +23,12 @@ library
     Ivory.Opts.Asserts
     Mira
     Mira.ACL2
-    Mira.ACL2ConvertCPS
+    Mira.ACL2Convert
     Mira.CLL
     Mira.CPS
     Mira.CPSConvert
     Mira.Expr
     Mira.RecTopoSort
-    Mira.Verify
   hs-source-dirs: src
   ghc-options: -W
 
