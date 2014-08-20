@@ -21,7 +21,7 @@ import Mira.Expr hiding (Expr (..))
 import qualified Mira.Expr as E
 
 -- | A procedure is a name, a list of arguments, an optional measure, and its continuation (body).
-data Proc = Proc Var [Var] (Maybe E.Expr) Cont
+data Proc = Proc Var [Var] (Maybe E.Expr) Cont deriving Eq
 
 instance Show Proc where
   show (Proc name args Nothing  body) = printf "%s(%s)\n%s\n" name (intercalate ", " args) (indent $ show body)
@@ -74,6 +74,8 @@ data Cont
   | If       Var Cont Cont           -- ^ Conditionally follow one continuation or another.
   | Assert   Var Cont                -- ^ Assert a value and continue.
   | Assume   Var Cont                -- ^ State an assumption and continue.
+  | Mark     Cont                    -- ^ A marked cont for verification.
+  deriving Eq
 
 instance Show Cont where
   show a = case a of
@@ -88,6 +90,7 @@ instance Show Cont where
     Assume   a b          -> printf "assume %s\n%s" a (show b)
     Let      a b c        -> printf "let %s = %s\n%s" a (show b) (show c)
     Store    a b c        -> printf "store %s = %s\n%s" a b (show c)
+    Mark     a            -> printf "mark %s\n" $ show a
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
@@ -111,6 +114,7 @@ variables = nub . ("retval" :) . concatMap proc
     Assume   a b      -> a : cont b
     Let      a b c    -> a : value b ++ cont c
     Store    a b c    -> [a, b] ++ cont c
+    Mark     a        -> cont a
 
   value :: Value -> [Var]
   value a = case a of
@@ -141,6 +145,7 @@ contFreeVars = nub . cont ["retval"]
     If       a b c    -> var a ++ cont i b ++ cont i c
     Assert   a b      -> var a ++ cont i b
     Assume   a b      -> var a ++ cont i b
+    Mark     a        -> cont i a
     where
     var :: Var -> [Var]
     var a = if elem a i then [] else [a]
@@ -182,6 +187,7 @@ explicitStack (Proc name args measure body) = Proc name args measure $ cont body
     Assume  a b         -> Assume a $ cont b
     Let     a b c       -> Let a b $ cont c
     Store   a b c       -> Store a b $ cont c
+    Mark    a           -> cont a
 
 -- | Replace a continuation given a pattern to match.
 replaceCont :: (Cont -> Maybe Cont) -> Cont -> Cont
@@ -197,6 +203,7 @@ replaceCont replacement a = case replacement a of
     If      a b c -> If a (rep b) (rep c)
     Assert  a b   -> Assert a $ rep b
     Assume  a b   -> Assume a $ rep b
+    Mark    a     -> Mark $ rep a
   where
   rep = replaceCont replacement
 
@@ -230,6 +237,7 @@ commonSubExprElim (Proc name args measure body) = Proc name args measure $ elim 
     If     a b c -> If (var a) (elim' b) (elim' c)
     Assert a b   -> Assert (var a) $ elim' b
     Assume a b   -> Assume (var a) $ elim' b
+    Mark   a     -> Mark $ elim' a
     where
     elim' = elim env vars
 
@@ -268,6 +276,7 @@ removeAsserts (Proc name args measure body) = Proc name args measure $ r body
     If     a b c    -> If a (r b) (r c)
     Assert _ b      -> r b
     Assume _ b      -> r b
+    Mark   a        -> Mark $ r a
 
 -- | Remove unused lets.
 removeNullEffect :: Proc -> Proc
@@ -289,4 +298,5 @@ removeNullEffect (Proc name args measure body) = Proc name args measure $ r body
     If     a b c    -> If a (r b) (r c)
     Assert a b      -> Assert a $ r b
     Assume a b      -> Assume a $ r b
+    Mark   a        -> Mark $ r a
 

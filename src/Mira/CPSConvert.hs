@@ -51,6 +51,7 @@ cpsStmts a cont = case a of
       C.Return Nothing  -> return $ Return Nothing  -- Again, ignores cont.
       C.Assert a   -> cpsExpr a $ \ a -> return $ Assert a cont
       C.Assume a   -> cpsExpr a $ \ a -> return $ Assume a cont
+      C.Mark   a   -> do { a <- cpsStmts [a] cont; return $ Mark a }
       C.Let    a b -> cpsExpr b $ \ b -> return $ Let a (Var b) cont
       C.Alloc  a   -> return $ Let a Alloc cont
       C.Store  a b -> cpsExpr a $ \ a -> cpsExpr b $ \ b -> return $ Store a b cont

@@ -77,6 +77,7 @@ cont a = case a of
   Halt         -> return $ cons heap nil
   Assert a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
   Assume a b   -> do { b <- cont b; return $ call "assert-cond" [var a, b] }
+  Mark   a     -> cont a
   If     a b c -> do { b <- cont b; c <- cont c; return $ if' (zip' $ var a) c b }
   Push   _ _   -> error "Unsupported: Push"
   Let    a b c -> do

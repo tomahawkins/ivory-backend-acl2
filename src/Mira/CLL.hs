@@ -37,6 +37,7 @@ data Stmt
   | Loop   Var Expr Bool Expr [Stmt]
   | Block  [Stmt]
   | Null
+  | Mark   Stmt
 
 instance Show Stmt where
   show a = case a of

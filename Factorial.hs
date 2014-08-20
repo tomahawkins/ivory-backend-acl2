@@ -28,16 +28,23 @@ factorialACL2 = compile factorialModule
 
 main :: IO ()
 main = do
+  --mapM_ print factorialACL2
+
   terminates <- A.check factorialACL2
   putStrLn $ "Termination: " ++ (if terminates then "pass" else "fail")
 
-  test <- A.check $ compile factorialModule ++ [A.thm $ A.equal 24 $ A.cdr $ A.call "factorial" [A.nil, 4]]
+  test <- A.check $ factorialACL2 ++ [A.thm $ A.equal 24 $ A.cdr $ A.call "factorial" [A.nil, 4]]
   putStrLn $ "factorial 4 == 24: " ++ (if test then "pass" else "fail")
 
+  --`where
 
-
-
-
+  {-
+  let a = A.var "a"
+      fac a = A.cdr $ A.call "factorial" [A.nil, a]
+      t = A.implies (a A.>. 1) (fac a A.>. a)
+  test <- A.check' $ compile factorialModule ++ [A.thm t]
+  putStrLn $ "a > 0 -> factorial a >= a: " ++ (if test then "pass" else "fail")
+  -}
 
 
 

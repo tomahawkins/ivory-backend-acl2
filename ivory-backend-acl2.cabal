@@ -1,6 +1,7 @@
 name:       ivory-backend-acl2
 version:    0.0.0
-category:   Language
+category:   Language, Compiler, Formal Methods
+synopsis:   ACL2 code generation and assertion verification for Ivory.
 author:     Tom Hawkins  <tomahawkins@gmail.com>
 maintainer: Tom Hawkins  <tomahawkins@gmail.com>
 
@@ -16,10 +17,19 @@ library
     base     >= 4.0,
     process  >= 1.1,
     monadLib >= 3.7.2,
-    ivory,
-    mira
+    ivory
   exposed-modules:
     Ivory.Compile.ACL2
+    Ivory.Opts.Asserts
+    Mira
+    Mira.ACL2
+    Mira.ACL2ConvertCPS
+    Mira.CLL
+    Mira.CPS
+    Mira.CPSConvert
+    Mira.Expr
+    Mira.RecTopoSort
+    Mira.Verify
   hs-source-dirs: src
   ghc-options: -W
 

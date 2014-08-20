@@ -1,15 +1,17 @@
 module Mira.Verify
-  ( verifyProcs
+  ( verifyAssertion
   ) where
 
 import System.IO
 import Text.Printf
 
 import Mira.ACL2
-import Mira.CLL hiding (Expr)
 import qualified Mira.CLL as C
+import Mira.CPS
+import Mira.CPSConvert
 import Mira.Expr (exprACL2)
 
+{-
 verifyProcs :: [Proc] -> IO Bool
 verifyProcs p = mapM verifyProc p >>= return . and
 
@@ -55,6 +57,29 @@ verifyAssertions nextId body stmts = case stmts of
     Store  a b          -> printf "store %s = %s\n" (show a) (show b)
     Loop   a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
     -}
+-}
 
+verifyAssertion :: [C.Proc] -> IO Bool
+verifyAssertion procs' = return True -- XXX
+  where
+  procs = cpsConvert procs'
 
+  [Proc _ args _ body] = filter procHasMark procs
+
+  procHasMark :: Proc -> Bool
+  procHasMark (Proc _ _ _ a) = contHasMark a
+
+  contHasMark :: Cont -> Bool
+  contHasMark a = case a of
+    Mark _ -> True
+    Halt   -> False
+    Call   _ _ (Just a) -> contHasMark a
+    Call   _ _ Nothing -> False
+    Return _     -> False
+    Push   _ a   -> contHasMark a
+    Let    _ _ a -> contHasMark a
+    Store  _ _ a -> contHasMark a
+    If     _ a b -> contHasMark a || contHasMark b
+    Assert _ a   -> contHasMark a
+    Assume _ a   -> contHasMark a
 

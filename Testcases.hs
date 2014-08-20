@@ -116,6 +116,8 @@ arrayTest = proc "arrayTest" $ {- ensures (.= 6) $ -} body $ do
 
 main :: IO ()
 main = do
+  --mapM_ print $ compile (package "arrayTest" $ incl arrayTest)
+
   test "assertions: intrinsicTest"  $ verifyAssertions  $ package "intrinsicTest" $ incl intrinsicTest
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
   testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
@@ -131,4 +133,3 @@ main = do
     if pass
       then putStrLn $ "pass: " ++ name
       else putStrLn $ "FAIL: " ++ name
-

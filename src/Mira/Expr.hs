@@ -58,6 +58,7 @@ data Expr
   | ArrayIndex  Expr Expr
   | StructIndex Expr String
   | Intrinsic   Intrinsic [Expr]
+  deriving Eq
 
 instance Show Expr where
   show a = case a of
@@ -119,10 +120,10 @@ intrinsicACL2 a arg = case a of
   Eq     -> if' (equal (arg 0) (arg 1)) 1 0
   Neq    -> if' (not' (equal (arg 0) (arg 1))) 1 0
   Cond   -> if' (zip' (arg 0)) (arg 2) (arg 1)
-  Gt     -> if' (call ">"  [arg 0, arg 1]) 1 0
-  Ge     -> if' (call ">=" [arg 0, arg 1]) 1 0
-  Lt     -> if' (call "<"  [arg 0, arg 1]) 1 0
-  Le     -> if' (call "<=" [arg 0, arg 1]) 1 0
+  Gt     -> if' (arg 0 >.  arg 1) 1 0
+  Ge     -> if' (arg 0 >=. arg 1) 1 0
+  Lt     -> if' (arg 0 <.  arg 1) 1 0
+  Le     -> if' (arg 0 <=. arg 1) 1 0
   Not    -> if' (zip' (arg 0)) 1 0
   And    -> if' (or'  (zip' (arg 0)) (zip' (arg 1))) 0 1
   Or     -> if' (and' (zip' (arg 0)) (zip' (arg 1))) 0 1
@@ -131,8 +132,8 @@ intrinsicACL2 a arg = case a of
   Add    -> arg 0 + arg 1
   Sub    -> arg 0 - arg 1
   Negate -> 0 - arg 0
-  Abs    -> if' (call ">=" [arg 0, 0]) (arg 0) (0 - arg 0)
-  Signum -> if' (call ">"  [arg 0, 0]) 1 $ if' (call "<" [arg 0, 0]) (-1) 0
+  Abs    -> if' (arg 0 >=. 0) (arg 0) (0 - arg 0)
+  Signum -> if' (arg 0 >.  0) 1 $ if' (arg 0 <. 0) (-1) 0
 
 exprACL2 :: Expr -> A.Expr
 exprACL2 a = case a of

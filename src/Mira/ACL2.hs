@@ -2,6 +2,7 @@
 module Mira.ACL2
   ( Expr (..)
   , check
+  , check'
   , mutualRecursion
   , defun
   , defun'
@@ -42,6 +43,10 @@ module Mira.ACL2
   , goodbye
   , integerp
   , mod'
+  , (<.)
+  , (>.)
+  , (<=.)
+  , (>=.)
   ) where
 
 import Data.List
@@ -80,11 +85,12 @@ sExpr a = case a of
   Obj     a   -> SA $ map sExpr a
   Lit     a   -> SV a
 
-check :: [Expr] -> IO Bool
-check a = do
+check'' :: Bool -> [Expr] -> IO Bool
+check'' debug a = do
   exe <- savedACL2
   (_, result, _) <- readProcessWithExitCode exe [] code
   let pass = not $ any (isPrefixOf "ACL2 Error") $ lines result
+  if debug then putStrLn result else return ()
   return pass
   where
   code = unlines $ map show a
@@ -94,6 +100,12 @@ check a = do
     case lookup "ACL2_SOURCES" env of
       Nothing -> error "Environment variable ACL2_SOURCES not set."
       Just a -> return $ a ++ "/saved_acl2"
+
+check :: [Expr] -> IO Bool
+check = check'' False
+
+check' :: [Expr] -> IO Bool
+check' = check'' True
 
 uni :: String -> Expr -> Expr
 uni f a = call f [a]
@@ -227,6 +239,18 @@ goodbye = call "good-bye" []
 
 mod' :: Expr -> Expr -> Expr
 mod' = bin "mod"
+
+(<.) :: Expr -> Expr -> Expr
+(<.) = bin "<"
+
+(<=.) :: Expr -> Expr -> Expr
+(<=.) = bin "<="
+
+(>.) :: Expr -> Expr -> Expr
+(>.) = bin ">"
+
+(>=.) :: Expr -> Expr -> Expr
+(>=.) = bin ">="
 
 assoc :: Expr -> Expr -> Expr
 assoc = bin "assoc"

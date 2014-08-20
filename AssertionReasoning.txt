@@ -198,6 +198,41 @@ a loop occurs at the beginning or end of a function, it will not
 have any interface contracts.  However, post If statement generated
 functions can use the enclosing function's output contract if one exists.
 
+Rather than generating a function for the code after an If statement,
+another option another option would be to inline the suffix code in both
+branches.  This has the advantage of retaining full information (i.e. code)
+of the If statement.  For example, the following:
+
+function f (a, b) {
+  requires require1
+  ensures  ensure1
+  stmts1
+  if (cond) {
+    stmts2
+  }
+  else {
+    stmts3
+  }
+  stmts4
+}
+
+Would be transformed to:
+
+function f (a, b) {
+  requires require1
+  ensures  ensure1
+  stmts1
+  if (cond) {
+    stmts2
+    stmts4
+  }
+  else {
+    stmts3
+    stmts4
+  }
+}
+
+Loops could be treated similarly by loop unrolling.
 
 
 
