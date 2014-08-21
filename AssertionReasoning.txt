@@ -8,14 +8,7 @@ for the compiler to remove as many runtime checks as possible.
 Provide a hook for Ivory compiler that verifies and removes assertions and
 reports assertions that failed to verify:
 
-  -- A verification failure to report.
-  data Report
-    = FailedToVerifyAssert Module Proc Stmt
-    | FailedToVerifyEnsure Module Proc Ensure 
-    | FailedToVerifyRequireAtCallSite Module Proc Require Module Proc Stmt
-
-  -- Given a reporting function 
-  verifyAndRemoveAssertions :: (Report -> IO ()) -> [Module] -> IO [Module]
+  assertsFold :: [Module] -> IO [Module]
 
 
 
@@ -179,63 +172,54 @@ VC for f2_ensures:
 
 
 
-Recursion
+Recursion and Removing Input Contracts
 
-Q: How can we safely remove input contracts for recursive calls?
+As long as all input contracts are verified at all call sites,
+the input contracts can be safely removed.
+Care must be taken for functions that can be called from the outside,
+i.e. non Ivory functions, as these are instances of non-verifiable
+call sites.
 
-Purhaps for now, all input contracts should remain in place.
 
 
 
-
-If Statements and Loop
-
-If statements and loops are the two places in the analysis that produce
-generated functions.  A body of a loop is converted into a recursive function
-(terminates based on loop iteration) and code after an If statement is
-converted to a function that is called at the end of both branches of the conditional.
-How should these generated functions be handled?  Unless loop
-a loop occurs at the beginning or end of a function, it will not
-have any interface contracts.  However, post If statement generated
-functions can use the enclosing function's output contract if one exists.
-
-Rather than generating a function for the code after an If statement,
-another option another option would be to inline the suffix code in both
-branches.  This has the advantage of retaining full information (i.e. code)
-of the If statement.  For example, the following:
+If Statement Encoding
 
 function f (a, b) {
   requires require1
   ensures  ensure1
   stmts1
-  if (cond) {
+  if (cond1) {
     stmts2
+    assert2
   }
   else {
     stmts3
+    assert3
   }
   stmts4
+  assert4
 }
 
-Would be transformed to:
+Transformed to:
 
-function f (a, b) {
-  requires require1
-  ensures  ensure1
-  stmts1
-  if (cond) {
-    stmts2
-    stmts4
-  }
-  else {
-    stmts3
-    stmts4
-  }
-}
+  forall state0 a b .
+    let env0 = [("a", a), ("b", b)]
+    let vc1 = require1 (state0, env0) 
+    let (state1, env1) = stmts1 (state0, env0)
+    let (state2, env2) = stmts2 (state1, env1)
+    let vc2 = vc1 -> cond1 (state1, env1) -> assert2 (state2, env2)
+    let (state3, env3) = stmts3 (state1, env1)
+    let vc3 = vc1 -> ! cond1 (state1, env1) -> assert3 (state3, env3)
+    let (state4, env4) = stmts4 (if cond1 (state1, env1) then state2 else state3, env1)
+    let vc4 = vc1 -> vc2 -> vc3 -> assert4 (state4, env4)
 
-To safely remove assertions from stmts4, all instances of stmts4 have to be verify.
 
-Loops could be treated similarly by loop unrolling.
+
+
+Loops Statements
+
+???
 
 
 

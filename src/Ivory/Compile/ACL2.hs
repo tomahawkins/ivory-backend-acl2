@@ -1,6 +1,7 @@
 -- | Compiling Ivory to ACL2.
 module Ivory.Compile.ACL2
   ( compile
+  , cllExpr
   ) where
 
 import qualified Mira      as M

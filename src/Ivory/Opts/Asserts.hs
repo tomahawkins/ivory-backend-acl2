@@ -3,8 +3,27 @@ module Ivory.Opts.Asserts
   ( assertsFold
   ) where
 
-import qualified Ivory.Language.Syntax.AST as I
+import MonadLib
 
+import qualified Ivory.Language.Syntax.AST as I
+import qualified Mira.ACL2 as A
+
+-- Data carried through verification monad.
+data VDB = VDB
+  { nextVCId
+  , nextBCId
+  , nextStateId
+  , nextEnvId   :: Int
+  , procName    :: String
+  , body        :: A.Expr -> A.Expr
+  , branch      :: A.Expr
+  , lemmas      :: A.Expr
+  }
+
+-- Verification monad.
+type V a = StateT VDB IO a
+
+-- | Analyze an entire Ivory program, removing as many assertions as possible.
 assertsFold :: [I.Module] -> IO [I.Module]
 assertsFold modules = mapM analyzeModule modules
   where
@@ -13,93 +32,94 @@ assertsFold modules = mapM analyzeModule modules
     pub <- mapM analyzeProc $ I.public  $ I.modProcs m
     pri <- mapM analyzeProc $ I.private $ I.modProcs m
     return m { I.modProcs = I.Visible pub pri }
+    where
+    analyzeProc :: I.Proc -> IO I.Proc
+    analyzeProc proc = do
+      b <- runStateT undefined $ block $ I.procBody proc
+      return $ proc { I.procBody = fst b }
 
-  analyzeProc :: I.Proc -> IO I.Proc
-  analyzeProc = return  --XXX
+block :: I.Block -> V I.Block
+block = mapM stmt
 
-{-
-module Mira.Verify
-  ( verifyAssertion
-  ) where
+-- Defines a new verification condition (VC).
+newVC :: I.Expr -> V A.Expr
+newVC check = do
+  m <- get
+  let vc = "_vc" ++ show (nextVCId m)
+  set m { nextVCId = nextVCId m + 1, body = body m . A.let' [(vc, A.implies (branch m) $ bool check)] }
+  return $ A.var vc
 
---import System.IO
---import Text.Printf
+-- Adds a VC as a lemma.
+addVC :: A.Expr -> V ()
+addVC a = do
+  m <- get
+  set m { lemmas = A.and' (lemmas m) a }
 
-import Mira.ACL2
-import qualified Mira.CLL as C
-import Mira.CPS
-import Mira.CPSConvert
-import Mira.Expr (exprACL2)
+-- Checks a verification condition then adds it to the list of lemmas.
+checkVC :: A.Expr -> V Bool
+checkVC a = do
+  m <- get
+  pass <- lift $ A.check [A.thm $ body m $ A.implies (lemmas m) a]
+  addVC a
+  return pass
 
-{-
-verifyProcs :: [Proc] -> IO Bool
-verifyProcs p = mapM verifyProc p >>= return . and
+-- Name of current procedure undergoing analysis.
+proc :: V String
+proc = do
+  m <- get
+  return $ procName m
 
-verifyProc :: Proc -> IO Bool
-verifyProc (Proc name args _ requires ensures body) = do
-  printf "Verifying procedure %s ..." name
-  hFlush stdout
-  a <- verifyAssertions 0 (implies (foldl and' t $ map bool requires)) body
-  printf "\n"
-  return a
+-- Defines a branching condition (BC).
+newBC :: I.Expr -> V A.Expr
+newBC cond = do
+  m <- get
+  let bc = "_bc" ++ show (nextBCId m)
+  set m { nextBCId = nextBCId m + 1, body = body m . A.let' [(bc, bool cond)] }
+  return $ A.var bc
 
-bool :: C.Expr -> Expr
-bool = not' . zip' . exprACL2
+stmt :: I.Stmt -> V I.Stmt
+stmt a = case a of
+  I.Assert         b -> checkAssert a b
+  I.CompilerAssert b -> checkAssert a b
+  I.Assume         b -> newVC b >>= addVC >> return a
 
-checkThm :: Expr -> IO Bool
-checkThm a = check [thm a]
+  -- XXX How to handle state and env changes?  Need to hide env changes after the branch merges.
+  I.IfTE a b c -> do
+    cond <- newBC a
+    m0 <- get
+    set m0 { branch = A.and' (branch m0) cond }
+    b <- block b
+    m1 <- get
+    set m1 { branch = A.and' (branch m0) $ A.not' cond }   -- Asserts in true branch are used as lemmas is false branch, but I don't think they help.
+    c <- block c
+    m2 <- get
+    set m2 { branch = branch m0 }
+    return $ I.IfTE a b c
 
-verifyAssertions :: Int -> (Expr -> Expr) -> [Stmt] -> IO Bool
-verifyAssertions nextId body stmts = case stmts of
-  [] -> return True
-  stmt : stmts -> case stmt of
-    Assert a -> do
-      pass <- checkThm $ body a'
-      if pass
-        then verifyAssertions nextId (body . implies a') stmts
-        else do
-          putStrLn $ "Assertion failed: " ++ show a
-          verifyAssertions nextId body stmts
-          return False
-      where
-      a' = bool a
-    Assume a -> verifyAssertions nextId (body . implies (bool a)) stmts
-    Null     -> verifyAssertions nextId body stmts
-    Return _ -> verifyAssertions nextId body stmts
-    Block  a -> verifyAssertions nextId body $ a ++ stmts
-    _ -> error $ "Unsupported statement: " ++ show stmt
+  {-
+  I.Deref  _ var ref   ->
+  I.Store  _ ref value -> 
+  I.Assign _ var value ->
+  -}
+  _ -> undefined
 
-    {-
-    Call   Nothing a b  -> printf "%s(%s)\n" a (intercalate ", " $ map show b)
-    Call   (Just c) a b -> printf "%s = %s(%s)\n" c a (intercalate ", " $ map show b)
-    If     a b c        -> printf "if (%s)\n" (show a) ++ indent (concatMap show b) ++ "\nelse\n" ++ indent (concatMap show c)
-    Let    a b          -> printf "let %s = %s\n" a $ show b
-    Store  a b          -> printf "store %s = %s\n" (show a) (show b)
-    Loop   a b c d e    -> printf "for (%s = %s; %s %s %s; %s%s)\n%s\n" a (show b) a (if c then "<=" else ">=") (show d) a (if c then "++" else "--") (indent $ concatMap show e)
-    -}
--}
+-- Verified assertions are turned into comments.
+checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
+checkAssert stmt check = do
+  proc <- proc
+  vc <- newVC check
+  pass <- checkVC vc
+  if pass
+    then do
+      return $ I.Comment $ "Assertion verified: " ++ show stmt
+    else do
+      lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
+      return stmt
 
-verifyAssertion :: [C.Proc] -> IO Bool
-verifyAssertion procs' = return True -- XXX
-  where
-  procs = cpsConvert procs'
 
-  [Proc _ args _ body] = filter procHasMark procs
+expr :: I.Expr -> A.Expr
+expr = undefined
 
-  procHasMark :: Proc -> Bool
-  procHasMark (Proc _ _ _ a) = contHasMark a
+bool :: I.Expr -> A.Expr
+bool = A.not' . A.zip' . expr
 
-  contHasMark :: Cont -> Bool
-  contHasMark a = case a of
-    Mark _ -> True
-    Halt   -> False
-    Call   _ _ (Just a) -> contHasMark a
-    Call   _ _ Nothing -> False
-    Return _     -> False
-    Push   _ a   -> contHasMark a
-    Let    _ _ a -> contHasMark a
-    Store  _ _ a -> contHasMark a
-    If     _ a b -> contHasMark a || contHasMark b
-    Assert _ a   -> contHasMark a
-    Assume _ a   -> contHasMark a
--}
