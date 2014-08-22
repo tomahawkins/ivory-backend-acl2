@@ -1,7 +1,8 @@
 -- | Compiling Ivory to ACL2.
 module Ivory.Compile.ACL2
   ( compile
-  , cllExpr
+  , var
+  , lit
   ) where
 
 import qualified Mira      as M
@@ -119,7 +120,7 @@ cllIntrinsic op = case op of
   I.ExpNegate        -> M.Negate
   I.ExpAbs           -> M.Abs   
   I.ExpSignum        -> M.Signum
-  a                -> error $ "Unsupported Ivory intrinsic: " ++ show a
+  a -> error $ "Unsupported intrinsic: " ++ show a
 
 lit :: I.Literal -> M.Literal
 lit a = case a of

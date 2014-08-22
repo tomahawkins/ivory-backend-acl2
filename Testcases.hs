@@ -17,8 +17,8 @@ import qualified Mira.ACL2 as A
 
 --type Stmt = forall s . Ivory (ProcEffects s ()) ()
 
-intrinsicTest :: Def ('[] :-> ())
-intrinsicTest = proc "intrinsicTest" $ body $ do
+intrinsicTest :: Def ('[IBool] :-> ())
+intrinsicTest = proc "intrinsicTest" $ \ cond1 -> body $ do
   assert $ true
   assert $ iNot false
   assert $ 1 + 2 ==? (3 :: Sint32)
@@ -51,9 +51,15 @@ intrinsicTest = proc "intrinsicTest" $ body $ do
   assert $ negate 3 ==? (-3 :: Sint32)
   assert $ abs (-3) ==? (3 :: Sint32)
   assert $ signum 0 ==? (0 :: Sint32)
+
+  ifte_ cond1
+    (assert cond1)
+    (assert $ iNot cond1)
+  assert $ cond1 .|| iNot cond1
+
   -- A test of assumptions.
-  assume false
-  assert false
+  --assume false
+  --assert false
   retVoid
 
 -- Factorial of a number.
