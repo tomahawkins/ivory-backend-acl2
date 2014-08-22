@@ -17,8 +17,9 @@ import qualified Mira.ACL2 as A
 
 --type Stmt = forall s . Ivory (ProcEffects s ()) ()
 
-intrinsicTest :: Def ('[IBool] :-> ())
-intrinsicTest = proc "intrinsicTest" $ \ cond1 -> body $ do
+intrinsicTest :: Def ('[IBool, Sint32] :-> ())
+intrinsicTest = proc "intrinsicTest" $ \ cond1 num1 -> requires (num1 ==? 22) $ body $ do
+  -- Tests of basic expressions.
   assert $ true
   assert $ iNot false
   assert $ 1 + 2 ==? (3 :: Sint32)
@@ -52,15 +53,26 @@ intrinsicTest = proc "intrinsicTest" $ \ cond1 -> body $ do
   assert $ abs (-3) ==? (3 :: Sint32)
   assert $ signum 0 ==? (0 :: Sint32)
 
+  -- Test of preconditions.
+  assert $ num1 ==? 22
+
+  -- Test of refs and branches.
+  ref <- local (ival 0)
   ifte_ cond1
-    (assert cond1)
-    (assert $ iNot cond1)
+    (do { assert cond1;        store ref (22 :: Sint32) })
+    (do { assert $ iNot cond1; store ref (44 :: Sint32) })
   assert $ cond1 .|| iNot cond1
+  n <- deref ref
+  assert $ implies cond1        (n ==? 22)
+  assert $ implies (iNot cond1) (n ==? 44)
 
   -- A test of assumptions.
   --assume false
   --assert false
   retVoid
+
+implies :: IBool -> IBool -> IBool
+implies a b = iNot a .|| b
 
 -- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)
@@ -128,6 +140,7 @@ main = do
   --mapM_ print $ compile (package "arrayTest" $ incl arrayTest)
 
   verifyAssertions $ package "intrinsicTest" $ incl intrinsicTest
+
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
   testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
   testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]

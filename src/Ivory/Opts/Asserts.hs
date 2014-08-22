@@ -18,7 +18,7 @@ data VDB = VDB
   , procName    :: String
   , body        :: A.Expr -> A.Expr
   , branch      :: A.Expr
-  , lemmas      :: A.Expr
+  , lemmas      :: [A.Expr]
   }
 
 -- Verification monad.
@@ -36,7 +36,9 @@ assertsFold modules = mapM analyzeModule modules
     where
     analyzeProc :: I.Proc -> IO I.Proc
     analyzeProc proc = do
-      b <- runStateT init $ block $ I.procBody proc
+      b <- runStateT init $ do
+        mapM_ require $ I.procRequires proc
+        block $ I.procBody proc
       return $ proc { I.procBody = fst b }
       where
       init = VDB
@@ -46,9 +48,20 @@ assertsFold modules = mapM analyzeModule modules
         , procName = I.procSym proc
         , body     = id
         , branch   = A.t
-        , lemmas   = A.t
+        , lemmas   = []
         }
 
+-- Convert requires to lemmas.
+require :: I.Require -> V ()
+require (I.Require a) = do
+  a <- case a of
+    I.CondBool a -> bool a
+    I.CondDeref _ _ _ _ -> undefined
+  m <- get
+  set m { lemmas = lemmas m ++ [a] }
+
+
+-- Rewrite statement blocks.
 block :: I.Block -> V I.Block
 block = mapM stmt
 
@@ -65,13 +78,15 @@ newVC check = do
 addVC :: A.Expr -> V ()
 addVC a = do
   m <- get
-  set m { lemmas = A.and' (lemmas m) a }
+  set m { lemmas = lemmas m ++ [a] }
 
 -- Checks a verification condition then adds it to the list of lemmas.
 checkVC :: A.Expr -> V Bool
 checkVC a = do
   m <- get
-  pass <- lift $ A.check [A.thm $ body m $ A.implies (lemmas m) a]
+  let thm = A.thm $ body m $ A.implies (foldl A.and' A.t $ lemmas m) a
+  pass <- lift $ A.check [A.call "set-ignore-ok" [A.t], thm]
+  --if not pass then lift (print thm) else return ()
   addVC a
   return pass
 
@@ -97,6 +112,7 @@ newFree = do
   set m { nextFreeId = nextFreeId m + 1 }
   return $ "_free" ++ show (nextFreeId m)
 
+-- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
 stmt a = case a of
   I.Assert         b -> checkAssert a b
@@ -110,10 +126,13 @@ stmt a = case a of
     set m0 { branch = A.and' (branch m0) cond }
     b <- block b
     m1 <- get
-    set m1 { branch = A.and' (branch m0) $ A.not' cond }   -- Asserts in true branch are used as lemmas is false branch, but I don't think they help.
+    set m1 { branch = A.and' (branch m0) $ A.not' cond, lemmas = lemmas m0 }
     c <- block c
     m2 <- get
-    set m2 { branch = branch m0 }
+    let l = length $ lemmas m0
+        lemmas1 = drop l $ lemmas m1
+        lemmas2 = drop l $ lemmas m2
+    set m2 { branch = branch m0, lemmas = lemmas m0 ++ lemmas1 ++ lemmas2 }
     return $ I.IfTE a b c
 
   I.Deref  _ _ _   -> return a
@@ -169,6 +188,7 @@ expr' a = case a of
   -- Unsupported expressions become free varaibles.
   _ -> newFree >>= return . M.Var
 
+-- Convert Ivory intrinsitcs to Mira intrinsics.
 intrinsic :: I.ExpOp -> Maybe M.Intrinsic
 intrinsic op = case op of
   I.ExpEq   _        -> Just M.Eq
