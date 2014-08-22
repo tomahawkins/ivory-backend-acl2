@@ -6,14 +6,14 @@ module Ivory.Opts.Asserts
 import MonadLib
 
 import qualified Ivory.Language.Syntax.AST as I
+import Ivory.Compile.ACL2 (cllExpr)
+import Mira.Expr (exprACL2)
 import qualified Mira.ACL2 as A
 
 -- Data carried through verification monad.
 data VDB = VDB
   { nextVCId
-  , nextBCId
-  , nextStateId
-  , nextEnvId   :: Int
+  , nextBCId    :: Int
   , procName    :: String
   , body        :: A.Expr -> A.Expr
   , branch      :: A.Expr
@@ -35,8 +35,17 @@ assertsFold modules = mapM analyzeModule modules
     where
     analyzeProc :: I.Proc -> IO I.Proc
     analyzeProc proc = do
-      b <- runStateT undefined $ block $ I.procBody proc
+      b <- runStateT init $ block $ I.procBody proc
       return $ proc { I.procBody = fst b }
+      where
+      init = VDB
+        { nextVCId = 0
+        , nextBCId = 0
+        , procName = I.procSym proc
+        , body     = id
+        , branch   = A.t
+        , lemmas   = A.t
+        }
 
 block :: I.Block -> V I.Block
 block = mapM stmt
@@ -81,7 +90,7 @@ stmt :: I.Stmt -> V I.Stmt
 stmt a = case a of
   I.Assert         b -> checkAssert a b
   I.CompilerAssert b -> checkAssert a b
-  I.Assume         b -> newVC b >>= addVC >> return a
+  I.Assume         b -> checkAssert a b
 
   -- XXX How to handle state and env changes?  Need to hide env changes after the branch merges.
   I.IfTE a b c -> do
@@ -96,12 +105,20 @@ stmt a = case a of
     set m2 { branch = branch m0 }
     return $ I.IfTE a b c
 
-  {-
-  I.Deref  _ var ref   ->
-  I.Store  _ ref value -> 
-  I.Assign _ var value ->
-  -}
-  _ -> undefined
+  I.Deref  _ _ _   -> return a
+  I.Store  _ _ _   -> return a
+  I.Assign _ _ _   -> return a
+  I.Return _       -> return a
+  I.ReturnVoid     -> return a
+  I.Local _ _ _    -> return a
+  I.Call  _ _ _ _  -> return a
+  I.RefCopy _ _ _  -> return a
+  I.AllocRef _ _ _ -> return a
+  I.Forever _      -> return a
+  I.Loop _ _ _ _   -> return a
+  I.Break          -> return a
+  I.Comment _      -> return a
+  
 
 -- Verified assertions are turned into comments.
 checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
@@ -118,7 +135,7 @@ checkAssert stmt check = do
 
 
 expr :: I.Expr -> A.Expr
-expr = undefined
+expr = exprACL2 . cllExpr
 
 bool :: I.Expr -> A.Expr
 bool = A.not' . A.zip' . expr

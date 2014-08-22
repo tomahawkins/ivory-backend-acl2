@@ -12,6 +12,7 @@ module Main (main) where
 
 import Ivory.Language
 import Ivory.Compile.ACL2
+import Ivory.Opts.Asserts
 import qualified Mira.ACL2 as A
 
 --type Stmt = forall s . Ivory (ProcEffects s ()) ()
@@ -113,12 +114,14 @@ arrayTest = proc "arrayTest" $ {- ensures (.= 6) $ -} body $ do
   -- Return the computed sum.
   deref sum >>= ret
 
+verifyAssertions :: Module -> IO ()
+verifyAssertions m = assertsFold [m] >> return ()
 
 main :: IO ()
 main = do
   --mapM_ print $ compile (package "arrayTest" $ incl arrayTest)
 
-  --test "assertions: intrinsicTest"  $ verifyAssertions  $ package "intrinsicTest" $ incl intrinsicTest
+  verifyAssertions $ package "intrinsicTest" $ incl intrinsicTest
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
   testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
   testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
