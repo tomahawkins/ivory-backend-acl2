@@ -137,14 +137,14 @@ intrinsicACL2 a arg = case a of
 
 exprACL2 :: Expr -> A.Expr
 exprACL2 a = case a of
-  Var a -> var a
-  Literal a -> lit $ showLit a
-  Deref _ -> error $ "Deref not supported yet."
+  Var         a   -> var a
+  Literal     a   -> lit $ showLit a
+  Deref       a   -> nth (exprACL2 a) $ var "heap"
   Array       a   -> list $ map exprACL2 a
   Struct      a   -> list [ cons (string a) (exprACL2 b) | (a, b) <- a ]
   ArrayIndex  a b -> nth (exprACL2 b) (exprACL2 a)
   StructIndex a b -> cdr $ assoc (string b) (exprACL2 a)
-  Intrinsic   i args -> intrinsicACL2 i (map exprACL2 args !!)
+  Intrinsic   i a -> intrinsicACL2 i (map exprACL2 a !!)
 
 showLit :: Literal -> String
 showLit a = case a of

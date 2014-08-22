@@ -54,11 +54,17 @@ assertsFold modules = mapM analyzeModule modules
 -- Convert requires to lemmas.
 require :: I.Require -> V ()
 require (I.Require a) = do
-  a <- case a of
-    I.CondBool a -> bool a
-    I.CondDeref _ _ _ _ -> undefined
+  a <- cond a
   m <- get
   set m { lemmas = lemmas m ++ [a] }
+  where
+  cond :: I.Cond -> V A.Expr
+  cond a = case a of
+    I.CondBool a -> bool a
+    I.CondDeref _ ref v a -> do
+      deref <- expr' ref >>= return . M.exprACL2 . M.Deref
+      a <- cond a
+      return $ A.let' [(var v, deref)] a
 
 
 -- Rewrite statement blocks.
@@ -135,6 +141,7 @@ stmt a = case a of
     set m2 { branch = branch m0, lemmas = lemmas m0 ++ lemmas1 ++ lemmas2 }
     return $ I.IfTE a b c
 
+  -- XXX
   I.Deref  _ _ _   -> return a
   I.Store  _ _ _   -> return a
   I.Assign _ _ _   -> return a

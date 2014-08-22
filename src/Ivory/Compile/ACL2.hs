@@ -61,7 +61,7 @@ cllStmt a = case a of
   I.Assume         a     -> M.Assume $ cllExpr a
   I.Local          _ a b -> M.Let (var a) $ cllInit b
   I.AllocRef       _ a b -> M.Block [M.Alloc $ var a, M.Store (M.Var $ var a) (M.Var $ var b)]
-  I.Deref          _ a b -> M.Let   (var a) $ M.Deref $ cllExpr b
+  I.Deref          _ a b -> M.Let (var a) $ M.Deref $ cllExpr b
   I.Store          _ a b -> M.Store (cllExpr a) (cllExpr b)
 
   I.Call   _ Nothing  fun args  -> M.Call Nothing        (var fun) $ map (cllExpr . I.tValue) args
