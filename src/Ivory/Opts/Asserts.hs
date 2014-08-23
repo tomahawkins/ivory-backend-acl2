@@ -4,8 +4,11 @@ module Ivory.Opts.Asserts
   ) where
 
 import MonadLib
+import Data.List
+import Text.Printf
 
-import qualified Ivory.Language.Syntax.AST as I
+import qualified Ivory.Language.Syntax.AST  as I
+import qualified Ivory.Language.Syntax.Type as I
 import Ivory.Compile.ACL2 (var, lit)
 import qualified Mira.Expr  as M
 import qualified Mira.ACL2 as A
@@ -15,10 +18,14 @@ data VDB = VDB
   { nextVCId    :: Int
   , nextBCId    :: Int
   , nextFreeId  :: Int
+  , nextEnvId   :: Int
+  , nextStateId :: Int
   , procName    :: String
-  , body        :: A.Expr -> A.Expr
-  , branch      :: A.Expr
-  , lemmas      :: [A.Expr]
+  , body        :: Expr -> Expr
+  , branch      :: Expr
+  , lemmas      :: [Expr]
+  , env         :: Expr
+  , state       :: Expr
   }
 
 -- Verification monad.
@@ -41,15 +48,24 @@ assertsFold modules = mapM analyzeModule modules
         block $ I.procBody proc
       return $ proc { I.procBody = fst b }
       where
+      args = map (var . I.tValue) $ I.procArgs proc
       init = VDB
-        { nextVCId = 0
-        , nextBCId = 0
-        , nextFreeId = 0
-        , procName = I.procSym proc
-        , body     = id
-        , branch   = A.t
-        , lemmas   = []
+        { nextVCId    = 0
+        , nextBCId    = 0
+        , nextFreeId  = 0
+        , nextEnvId   = 1
+        , nextStateId = 1
+        , procName    = I.procSym proc
+        , body        = ForAll ("state0" : args) . let' "env0" (initEnv args)
+        , branch      = true
+        , lemmas      = []
+        , env         = Var "env0"
+        , state       = Var "state0"
         }
+      initEnv :: [String] -> Expr
+      initEnv a = case a of
+        [] -> RecordNil
+        a : b -> RecordCons a (Var a) $ initEnv b
 
 -- Convert requires to lemmas.
 require :: I.Require -> V ()
@@ -58,13 +74,13 @@ require (I.Require a) = do
   m <- get
   set m { lemmas = lemmas m ++ [a] }
   where
-  cond :: I.Cond -> V A.Expr
+  cond :: I.Cond -> V Expr
   cond a = case a of
     I.CondBool a -> bool a
     I.CondDeref _ ref v a -> do
-      deref <- expr' ref >>= return . M.exprACL2 . M.Deref
+      deref <- undefined -- expr' ref >>= return . M.exprACL2 . M.Deref
       a <- cond a
-      return $ A.let' [(var v, deref)] a
+      return $ let' (var v) deref a
 
 
 -- Rewrite statement blocks.
@@ -72,26 +88,26 @@ block :: I.Block -> V I.Block
 block = mapM stmt
 
 -- Defines a new verification condition (VC).
-newVC :: I.Expr -> V A.Expr
+newVC :: I.Expr -> V Expr
 newVC check = do
   check <- bool check
   m <- get
-  let vc = "_vc" ++ show (nextVCId m)
-  set m { nextVCId = nextVCId m + 1, body = body m . A.let' [(vc, A.implies (branch m) check)] }
-  return $ A.var vc
+  let vc = "vc" ++ show (nextVCId m)
+  set m { nextVCId = nextVCId m + 1, body = body m . let' vc (implies (branch m) check) }
+  return $ Var vc
 
 -- Adds a VC as a lemma.
-addVC :: A.Expr -> V ()
+addVC :: Expr -> V ()
 addVC a = do
   m <- get
   set m { lemmas = lemmas m ++ [a] }
 
 -- Checks a verification condition then adds it to the list of lemmas.
-checkVC :: A.Expr -> V Bool
+checkVC :: Expr -> V Bool
 checkVC a = do
   m <- get
-  let thm = A.thm $ body m $ A.implies (foldl A.and' A.t $ lemmas m) a
-  pass <- lift $ A.check [A.call "set-ignore-ok" [A.t], thm]
+  let thm = body m $ implies (foldl and' true $ lemmas m) a
+  pass <- lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm]
   --if not pass then lift (print thm) else return ()
   addVC a
   return pass
@@ -103,20 +119,60 @@ proc = do
   return $ procName m
 
 -- Defines a branching condition (BC).
-newBC :: I.Expr -> V A.Expr
+newBC :: I.Expr -> V Expr
 newBC cond = do
   cond <- bool cond
   m <- get
-  let bc = "_bc" ++ show (nextBCId m)
-  set m { nextBCId = nextBCId m + 1, body = body m . A.let' [(bc, cond)] }
-  return $ A.var bc
+  let bc = "bc" ++ show (nextBCId m)
+  set m { nextBCId = nextBCId m + 1, body = body m . let' bc cond }
+  return $ Var bc
 
 -- Create a new free variable.
 newFree :: V String
 newFree = do
   m <- get
   set m { nextFreeId = nextFreeId m + 1 }
-  return $ "_free" ++ show (nextFreeId m)
+  return $ "free" ++ show (nextFreeId m)
+
+-- Create a new state variable.
+newState :: V String
+newState = do
+  m <- get
+  set m { nextStateId = nextStateId m + 1 }
+  return $ "state" ++ show (nextStateId m)
+
+-- Create a new env variable.
+newEnv :: V String
+newEnv = do
+  m <- get
+  set m { nextEnvId = nextEnvId m + 1 }
+  return $ "env" ++ show (nextEnvId m)
+
+getEnv :: V Expr
+getEnv = do
+  m <- get
+  return $ env m
+
+getState :: V Expr
+getState = do
+  m <- get
+  return $ state m
+
+addBody :: (Expr -> Expr) -> V ()
+addBody b = do
+  m <- get
+  set m { body = body m . b }
+
+extendEnv :: String -> Expr -> V ()
+extendEnv a b = do
+  env <- getEnv
+  env' <- newEnv
+  addBody $ let' env' $ RecordCons a b env 
+
+lookupEnv :: String -> V Expr
+lookupEnv a = do
+  env <- getEnv
+  return $ RecordProj env a
 
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
@@ -125,32 +181,44 @@ stmt a = case a of
   I.CompilerAssert b -> checkAssert a b
   I.Assume         b -> checkAssert a b
 
-  -- XXX How to handle state and env changes?  Need to hide env changes after the branch merges.
   I.IfTE a b c -> do
     cond <- newBC a
     m0 <- get
-    set m0 { branch = A.and' (branch m0) cond }
+    set m0 { branch = and' (branch m0) cond }
     b <- block b
     m1 <- get
-    set m1 { branch = A.and' (branch m0) $ A.not' cond, lemmas = lemmas m0 }
+    set m1 { branch = and' (branch m0) $ not' cond, lemmas = lemmas m0, env = env m0, state = state m0 }
     c <- block c
+    state' <- newState
     m2 <- get
     let l = length $ lemmas m0
         lemmas1 = drop l $ lemmas m1
         lemmas2 = drop l $ lemmas m2
-    set m2 { branch = branch m0, lemmas = lemmas m0 ++ lemmas1 ++ lemmas2 }
+    set m2
+      { branch = branch m0
+      , lemmas = lemmas m0 ++ lemmas1 ++ lemmas2
+      , body   = body m2 . let' state' (if' cond (state m1) (state m2))
+      , env    = env m0
+      , state  = Var state'
+      }
     return $ I.IfTE a b c
 
+  I.Deref    _ v r -> do
+    state <- getState
+    r <- expr r
+    extendEnv (var v) $ ArrayProj state r
+    return a
+
+  I.AllocRef _ r v -> return a  -- Introduces r.  Value v is a var.
+  I.Store    _ r v -> return a
+
   -- XXX
-  I.Deref  _ _ _   -> return a
-  I.Store  _ _ _   -> return a
   I.Assign _ _ _   -> return a
   I.Return _       -> return a
   I.ReturnVoid     -> return a
   I.Local _ _ _    -> return a
   I.Call  _ _ _ _  -> return a
   I.RefCopy _ _ _  -> return a
-  I.AllocRef _ _ _ -> return a
   I.Forever _      -> return a
   I.Loop _ _ _ _   -> return a
   I.Break          -> return a
@@ -170,16 +238,17 @@ checkAssert stmt check = do
       lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
       return stmt
 
--- Convert an Ivory expression to ACL2.
-expr :: I.Expr -> V A.Expr
-expr a = expr' a >>= return . M.exprACL2
+-- Convert an Ivory expression.
+expr :: I.Expr -> V Expr
+expr = undefined -- a = expr' a >>= return . M.exprACL2
 
 -- Convert an Ivory boolean expression to ACL2.
-bool :: I.Expr -> V A.Expr
-bool a = expr a >>= return . A.not' . A.zip'
+bool :: I.Expr -> V Expr
+bool = undefined -- a = expr a >>= return . A.not' . A.zip'
 
 -- Convert an Ivory expression to a CLL expression to reuse the CLL-to-ACL2 infrastructure.
 -- Unsupported expressions are converted to free variables.
+{-
 expr' :: I.Expr -> V M.Expr
 expr' a = case a of
   I.ExpSym      a       -> return $ M.Var a
@@ -216,4 +285,66 @@ intrinsic op = case op of
   I.ExpAbs           -> Just M.Abs   
   I.ExpSignum        -> Just M.Signum
   _                  -> Nothing
+-}
 
+acl2 :: Expr -> A.Expr
+acl2 = undefined
+
+data Expr
+  = Var        String
+  | ForAll     [String] Expr
+  | RecordNil
+  | RecordCons String Expr Expr  -- fieldName fieldValue record
+  | RecordProj Expr String
+  | ArrayNil
+  | ArrayCons  Expr Expr  -- array item
+  | ArrayProj  Expr Expr
+  | Let        String Expr Expr
+  | UniOp      UniOp Expr
+  | BinOp      BinOp Expr Expr
+  | If         Expr Expr Expr
+  | Const      Const
+
+data UniOp = Not | Length
+data BinOp = And | Or | Implies
+data Const = Bool Bool
+
+instance Show Expr where
+  show a = case a of
+    Var        a     -> a
+    ForAll     a b   -> printf "forall %s .\n%s" (intercalate " " a) (show b)
+    RecordNil        -> printf "[]"
+    RecordCons a b c -> printf "(%s, %s) : %s" a (show b) (show c)
+    RecordProj a b   -> printf "%s(%s)" (show a) b
+    ArrayNil         -> printf "[]"
+    ArrayCons  a b   -> printf "%s : %s" (show a) (show b)
+    ArrayProj  a b   -> printf "%s[%s]"  (show a) (show b)
+    Let        a b c -> printf "let %s = %s in\n%s" a (show b) (show c)
+    UniOp      a b   -> printf "(%s %s)" (show a) (show b)
+    BinOp      a b c -> printf "(%s %s %s)" (show b) (show c) (show b)
+    If         a b c -> printf "(if %s then %s else %s)" (show a) (show b) (show c)
+    Const      a     -> show a
+
+instance Show UniOp where
+  show a = case a of
+    Not -> "!"
+    Length -> "length"
+
+instance Show BinOp where
+  show a = case a of
+    And -> "&&"
+    Or  -> "||"
+    Implies -> "->"
+
+instance Show Const where
+  show a = case a of
+    Bool a -> if a then "true" else "false"
+
+let' = Let
+not' = UniOp Not
+and' = BinOp And
+or'  = BinOp Or
+true = Const $ Bool True
+false = Const $ Bool False
+implies = BinOp Implies
+if' = If
