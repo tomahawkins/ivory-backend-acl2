@@ -134,13 +134,6 @@ newFree = do
   set m { nextFreeId = nextFreeId m + 1 }
   return $ "free" ++ show (nextFreeId m)
 
--- Create a new state variable.
-newState :: V String
-newState = do
-  m <- get
-  set m { nextStateId = nextStateId m + 1 }
-  return $ "state" ++ show (nextStateId m)
-
 -- Create a new env variable.
 newEnv :: V String
 newEnv = do
@@ -148,31 +141,66 @@ newEnv = do
   set m { nextEnvId = nextEnvId m + 1 }
   return $ "env" ++ show (nextEnvId m)
 
+addBody :: (Expr -> Expr) -> V ()
+addBody b = do
+  m <- get
+  set m { body = body m . b }
+
 getEnv :: V Expr
 getEnv = do
   m <- get
   return $ env m
+
+setEnv :: Expr -> V ()
+setEnv a = do
+  m <- get
+  set m { env = a }
+
+extendEnv :: String -> Expr -> V ()
+extendEnv a b = do
+  env0 <- getEnv
+  env1 <- newEnv
+  addBody $ let' env1 $ RecordCons a b env0
+  setEnv $ Var env1
+
+lookupEnv :: String -> V Expr
+lookupEnv a = do
+  env <- getEnv
+  return $ RecordProj env a
+
+-- Create a new state variable and sets it as the current state.
+newState :: (Expr -> Expr) -> V ()
+newState f = do
+  m <- get
+  let state0 = state m
+      state1 = "state" ++ show (nextStateId m)
+  set m
+    { nextStateId = nextStateId m + 1
+    , state = Var state1
+    , body = body m . let' state1 (f state0)
+    }
 
 getState :: V Expr
 getState = do
   m <- get
   return $ state m
 
-addBody :: (Expr -> Expr) -> V ()
-addBody b = do
-  m <- get
-  set m { body = body m . b }
+-- Extends the state, returns pointer (index) to added state.
+extendState :: Expr -> V Expr
+extendState a = do
+  state0 <- getState
+  newState $ \ state0 -> ArrayCons state0 a
+  return $ length' state0
 
-extendEnv :: String -> Expr -> V ()
-extendEnv a b = do
-  env <- getEnv
-  env' <- newEnv
-  addBody $ let' env' $ RecordCons a b env 
+-- Updates a state value.
+updateState :: Expr -> Expr -> V ()
+updateState ref value = newState $ ArrayUpdate ref value
 
-lookupEnv :: String -> V Expr
-lookupEnv a = do
-  env <- getEnv
-  return $ RecordProj env a
+-- Dereference a reference.
+lookupState :: Expr -> V Expr
+lookupState ref = do
+  state <- getState
+  return $ ArrayProj state ref
 
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
@@ -189,7 +217,6 @@ stmt a = case a of
     m1 <- get
     set m1 { branch = and' (branch m0) $ not' cond, lemmas = lemmas m0, env = env m0, state = state m0 }
     c <- block c
-    state' <- newState
     m2 <- get
     let l = length $ lemmas m0
         lemmas1 = drop l $ lemmas m1
@@ -197,20 +224,26 @@ stmt a = case a of
     set m2
       { branch = branch m0
       , lemmas = lemmas m0 ++ lemmas1 ++ lemmas2
-      , body   = body m2 . let' state' (if' cond (state m1) (state m2))
       , env    = env m0
-      , state  = Var state'
       }
+    newState $ const $ if' cond (state m1) (state m2)
     return $ I.IfTE a b c
 
-  I.Deref    _ v r -> do
-    state <- getState
+  I.Deref    _ v r -> expr r >>= lookupState >>= extendEnv (var v) >> return a
+
+  I.AllocRef _ r v -> lookupEnv (var v) >>= extendState >>= extendEnv (var r) >> return a
+
+  I.Store    _ r v -> do
     r <- expr r
-    extendEnv (var v) $ ArrayProj state r
+    v <- expr v
+    updateState r v
     return a
 
-  I.AllocRef _ r v -> return a  -- Introduces r.  Value v is a var.
-  I.Store    _ r v -> return a
+  I.RefCopy _ r1 r2  -> do
+    r1 <- expr r1
+    r2 <- expr r2
+    lookupState r2 >>= updateState r1
+    return a
 
   -- XXX
   I.Assign _ _ _   -> return a
@@ -218,7 +251,6 @@ stmt a = case a of
   I.ReturnVoid     -> return a
   I.Local _ _ _    -> return a
   I.Call  _ _ _ _  -> return a
-  I.RefCopy _ _ _  -> return a
   I.Forever _      -> return a
   I.Loop _ _ _ _   -> return a
   I.Break          -> return a
@@ -291,19 +323,20 @@ acl2 :: Expr -> A.Expr
 acl2 = undefined
 
 data Expr
-  = Var        String
-  | ForAll     [String] Expr
+  = Var         String
+  | ForAll      [String] Expr
   | RecordNil
-  | RecordCons String Expr Expr  -- fieldName fieldValue record
-  | RecordProj Expr String
+  | RecordCons  String Expr Expr  -- fieldName fieldValue record
+  | RecordProj  Expr String
   | ArrayNil
-  | ArrayCons  Expr Expr  -- array item
-  | ArrayProj  Expr Expr
-  | Let        String Expr Expr
-  | UniOp      UniOp Expr
-  | BinOp      BinOp Expr Expr
-  | If         Expr Expr Expr
-  | Const      Const
+  | ArrayCons   Expr Expr  -- array item    Cons backwards to preserve indices.
+  | ArrayProj   Expr Expr
+  | ArrayUpdate Expr Expr Expr  -- index value array
+  | Let         String Expr Expr
+  | UniOp       UniOp Expr
+  | BinOp       BinOp Expr Expr
+  | If          Expr Expr Expr
+  | Const       Const
 
 data UniOp = Not | Length
 data BinOp = And | Or | Implies
@@ -311,19 +344,20 @@ data Const = Bool Bool
 
 instance Show Expr where
   show a = case a of
-    Var        a     -> a
-    ForAll     a b   -> printf "forall %s .\n%s" (intercalate " " a) (show b)
-    RecordNil        -> printf "[]"
-    RecordCons a b c -> printf "(%s, %s) : %s" a (show b) (show c)
-    RecordProj a b   -> printf "%s(%s)" (show a) b
-    ArrayNil         -> printf "[]"
-    ArrayCons  a b   -> printf "%s : %s" (show a) (show b)
-    ArrayProj  a b   -> printf "%s[%s]"  (show a) (show b)
-    Let        a b c -> printf "let %s = %s in\n%s" a (show b) (show c)
-    UniOp      a b   -> printf "(%s %s)" (show a) (show b)
-    BinOp      a b c -> printf "(%s %s %s)" (show b) (show c) (show b)
-    If         a b c -> printf "(if %s then %s else %s)" (show a) (show b) (show c)
-    Const      a     -> show a
+    Var         a     -> a
+    ForAll      a b   -> printf "forall %s .\n%s" (intercalate " " a) (show b)
+    RecordNil         -> printf "[]"
+    RecordCons  a b c -> printf "(%s, %s) : %s" a (show b) (show c)
+    RecordProj  a b   -> printf "%s(%s)" (show a) b
+    ArrayNil          -> printf "[]"
+    ArrayCons   a b   -> printf "%s : %s" (show a) (show b)
+    ArrayProj   a b   -> printf "%s[%s]"  (show a) (show b)
+    ArrayUpdate a b c -> printf "update %s %s %s" (show a) (show b) (show c)
+    Let         a b c -> printf "let %s = %s in\n%s" a (show b) (show c)
+    UniOp       a b   -> printf "(%s %s)" (show a) (show b)
+    BinOp       a b c -> printf "(%s %s %s)" (show b) (show a) (show b)
+    If          a b c -> printf "(if %s then %s else %s)" (show a) (show b) (show c)
+    Const       a     -> show a
 
 instance Show UniOp where
   show a = case a of
@@ -348,3 +382,4 @@ true = Const $ Bool True
 false = Const $ Bool False
 implies = BinOp Implies
 if' = If
+length' = UniOp Length
