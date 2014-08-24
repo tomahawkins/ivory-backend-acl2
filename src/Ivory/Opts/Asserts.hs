@@ -9,8 +9,7 @@ import Text.Printf
 
 import qualified Ivory.Language.Syntax.AST  as I
 import qualified Ivory.Language.Syntax.Type as I
-import Ivory.Compile.ACL2 (var, lit)
-import qualified Mira.Expr  as M
+import Ivory.Compile.ACL2 (var)
 import qualified Mira.ACL2 as A
 
 -- Data carried through verification monad.
@@ -315,17 +314,13 @@ intrinsic op args = case op of
   I.ExpNot           -> return $ not' (arg 0)
   I.ExpAnd           -> return $ arg 0 &&. arg 1
   I.ExpOr            -> return $ arg 0 ||. arg 1
-  {-
-  I.ExpMod           -> Just M.Mod   
-  -}
   I.ExpAdd           -> return $ arg 0 + arg 1
   I.ExpSub           -> return $ arg 0 - arg 1
   I.ExpMul           -> return $ arg 0 * arg 1
-  {-
-  I.ExpNegate        -> Just M.Negate
-  I.ExpAbs           -> Just M.Abs   
-  I.ExpSignum        -> Just M.Signum
-  -}
+  I.ExpMod           -> return $ mod' (arg 0) (arg 1)
+  I.ExpNegate        -> return $ negate (arg 0)
+  I.ExpAbs           -> return $ abs    (arg 0)
+  I.ExpSignum        -> return $ signum (arg 0)
   _                  -> newFree
   where
   arg = (args !!)
@@ -351,8 +346,26 @@ data Expr
   | Integer     Integer
   deriving Eq
 
-data UniOp = Not | Length deriving Eq
-data BinOp = And | Or | Implies | Eq | Lt | Gt | Add | Sub | Mul deriving Eq
+data UniOp
+  = Not
+  | Length
+  | Negate
+  | Abs
+  | Signum
+  deriving Eq
+
+data BinOp
+  = And
+  | Or
+  | Implies
+  | Eq
+  | Lt
+  | Gt
+  | Add
+  | Sub
+  | Mul
+  | Mod
+  deriving Eq
 
 instance Show Expr where
   show a = case a of
@@ -376,6 +389,9 @@ instance Show UniOp where
   show a = case a of
     Not -> "!"
     Length -> "length"
+    Negate -> "negate"
+    Abs    -> "abs"
+    Signum -> "signum"
 
 instance Show BinOp where
   show a = case a of
@@ -388,6 +404,7 @@ instance Show BinOp where
     Add     -> "+"
     Sub     -> "-"
     Mul     -> "*"
+    Mod     -> "%"
 
 let' = Let
 
@@ -473,3 +490,20 @@ instance Num Expr where
     (a, b) -> BinOp Mul a b
 
   fromInteger = Integer
+
+  negate a = case a of
+    Integer a -> Integer $ negate a
+    a -> UniOp Negate a
+
+  abs a = case a of
+    Integer a -> Integer $ abs a
+    a -> UniOp Abs a
+
+  signum a = case a of
+    Integer a -> Integer $ signum a
+    a -> UniOp Signum a
+
+mod' a b = case (a, b) of
+  (Integer a, Integer b) -> Integer $ mod a b
+  (a, b) -> BinOp Mod a b
+
