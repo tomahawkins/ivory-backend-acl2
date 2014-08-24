@@ -93,8 +93,12 @@ newVC check = do
   check <- expr check
   m <- get
   let vc = "vc" ++ show (nextVCId m)
-  set m { nextVCId = nextVCId m + 1, body = body m . let' vc (implies (branch m) check) }
-  return $ Var vc
+      vc' = implies (branch m) check
+  case vc' of
+    Bool a -> return $ Bool a
+    _ -> do 
+      set m { nextVCId = nextVCId m + 1, body = body m . let' vc vc' }
+      return $ Var vc
 
 -- Adds a VC as a lemma.
 addVC :: Expr -> V ()
@@ -106,10 +110,12 @@ addVC a = do
 checkVC :: Expr -> V Bool
 checkVC a = do
   m <- get
-  let thm = body m $ implies (foldl and' true $ lemmas m) a
+  let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
   lift $ print thm
   lift $ putStrLn ""
-  pass <- lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm]
+  pass <- case thm of
+    Bool a -> return a
+    thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm]
   --if not pass then lift (print thm) else return ()
   addVC a
   return pass
@@ -216,10 +222,10 @@ stmt a = case a of
   I.IfTE a b c -> do
     cond <- newBC a
     m0 <- get
-    set m0 { branch = and' (branch m0) cond }
+    set m0 { branch = branch m0 &&. cond }
     b <- block b
     m1 <- get
-    set m1 { branch = and' (branch m0) $ not' cond, lemmas = lemmas m0, env = env m0, state = state m0 }
+    set m1 { branch = branch m0 &&. not' cond, lemmas = lemmas m0, env = env m0, state = state m0 }
     c <- block c
     m2 <- get
     let l = length $ lemmas m0
@@ -281,8 +287,8 @@ checkAssert stmt check = do
 -- Convert an Ivory expression.  Unsupported expressions are converted to free variables (ForAll a).
 expr :: I.Expr -> V Expr
 expr a = case a of
-  I.ExpSym      a       -> return $ Var a
-  I.ExpVar      a       -> return $ Var $ var a
+  I.ExpSym      a       -> lookupEnv a
+  I.ExpVar      a       -> lookupEnv $ var a
   I.ExpLit      a       -> case a of
     I.LitBool    a -> return $ Bool    a
     I.LitInteger a -> return $ Integer a
@@ -299,28 +305,30 @@ expr a = case a of
 -- Convert Ivory intrinsitcs.
 intrinsic :: I.ExpOp -> [Expr] -> V Expr
 intrinsic op args = case op of
+  I.ExpEq   _        -> return $ arg 0 ==. arg 1
+  I.ExpNeq  _        -> return $ not' (arg 0 ==. arg 1)
+  I.ExpCond          -> return $ if' (arg 0) (arg 1) (arg 2)
+  I.ExpGt   False _  -> return $ arg 0 >.  arg 1
+  I.ExpGt   True  _  -> return $ arg 0 >=. arg 1
+  I.ExpLt   False _  -> return $ arg 0 <.  arg 1
+  I.ExpLt   True  _  -> return $ arg 0 <=. arg 1
+  I.ExpNot           -> return $ not' (arg 0)
+  I.ExpAnd           -> return $ arg 0 &&. arg 1
+  I.ExpOr            -> return $ arg 0 ||. arg 1
   {-
-  I.ExpEq   _        -> Just M.Eq
-  I.ExpNeq  _        -> Just M.Neq
-  I.ExpCond          -> Just M.Cond  
-  I.ExpGt   False _  -> Just M.Gt
-  I.ExpGt   True  _  -> Just M.Ge
-  I.ExpLt   False _  -> Just M.Lt
-  I.ExpLt   True  _  -> Just M.Le
-  -}
-  I.ExpNot           -> return $ not' (args !! 0)
-  I.ExpAnd           -> return $ and' (args !! 0) (args !! 1)
-  I.ExpOr            -> return $ or'  (args !! 0) (args !! 1)
-  {-
-  I.ExpMul           -> Just M.Mul   
   I.ExpMod           -> Just M.Mod   
-  I.ExpAdd           -> Just M.Add   
-  I.ExpSub           -> Just M.Sub   
+  -}
+  I.ExpAdd           -> return $ arg 0 + arg 1
+  I.ExpSub           -> return $ arg 0 - arg 1
+  I.ExpMul           -> return $ arg 0 * arg 1
+  {-
   I.ExpNegate        -> Just M.Negate
   I.ExpAbs           -> Just M.Abs   
   I.ExpSignum        -> Just M.Signum
   -}
   _                  -> newFree
+  where
+  arg = (args !!)
 
 acl2 :: Expr -> A.Expr
 acl2 = const A.t  -- XXX
@@ -344,7 +352,7 @@ data Expr
   deriving Eq
 
 data UniOp = Not | Length deriving Eq
-data BinOp = And | Or | Implies deriving Eq
+data BinOp = And | Or | Implies | Eq | Lt | Gt | Add | Sub | Mul deriving Eq
 
 instance Show Expr where
   show a = case a of
@@ -371,9 +379,15 @@ instance Show UniOp where
 
 instance Show BinOp where
   show a = case a of
-    And -> "&&"
-    Or  -> "||"
+    And     -> "&&"
+    Or      -> "||"
     Implies -> "->"
+    Eq      -> "=="
+    Lt      -> "<"
+    Gt      -> ">"
+    Add     -> "+"
+    Sub     -> "-"
+    Mul     -> "*"
 
 let' = Let
 
@@ -382,8 +396,8 @@ not' a = case a of
   Bool a -> Bool $ not a
   a      -> UniOp Not a
 
---and' = BinOp And
-and' a b = case (a, b) of
+--(&&.) = BinOp And
+a &&. b = case (a, b) of
   (Bool a, Bool b) -> Bool $ a && b
   (Bool False, _)  -> false
   (_, Bool False)  -> false
@@ -393,8 +407,8 @@ and' a b = case (a, b) of
     | a == b       -> a
     | otherwise    -> BinOp And a b
 
---or' = BinOp Or
-or' a b = case (a, b) of
+--(||.) = BinOp Or
+a ||. b = case (a, b) of
   (Bool a, Bool b) -> Bool $ a || b
   (Bool True, _)   -> true
   (_, Bool True)   -> true
@@ -406,13 +420,56 @@ or' a b = case (a, b) of
 
 --implies = BinOp Implies
 implies a b = case (a, b) of
-  (Bool a, b)      -> not' (Bool a) `or'` b
+  (Bool False, _)  -> true
+  (_, Bool True)   -> true
+  (Bool True, b)   -> b
   (a, b)
     | a == b       -> true
     | otherwise    -> BinOp Implies a b
 
 true  = Bool True
 false = Bool False
-if' = If
+if' a b c = case a of
+  Bool a -> if a then b else c
+  a 
+    | b == c -> b
+    | otherwise -> If a b c
+
 length' = UniOp Length
 
+a ==. b = case (a, b) of
+  (Integer a, Integer b) -> Bool $ a == b
+  (a, b)
+    | a == b    -> true
+    | otherwise -> BinOp Eq a b
+
+a <. b = case (a, b) of
+  (Integer a, Integer b) -> Bool $ a < b
+  (a, b)
+    | a == b    -> false
+    | otherwise -> BinOp Lt a b
+
+a <=. b = (a <. b) ||. (a ==. b)
+
+a >. b = case (a, b) of
+  (Integer a, Integer b) -> Bool $ a > b
+  (a, b)
+    | a == b    -> false
+    | otherwise -> BinOp Gt a b
+
+a >=. b = (a >. b) ||. (a ==. b)
+
+instance Num Expr where
+  a + b = case (a, b) of
+    (Integer a, Integer b) -> Integer $ a + b
+    (a, b) -> BinOp Add a b
+
+  a - b = case (a, b) of
+    (Integer a, Integer b) -> Integer $ a - b
+    (a, b) -> BinOp Sub a b
+
+  a * b = case (a, b) of
+    (Integer a, Integer b) -> Integer $ a * b
+    (a, b) -> BinOp Mul a b
+
+  fromInteger = Integer

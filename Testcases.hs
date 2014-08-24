@@ -24,7 +24,6 @@ intrinsicTest = proc "intrinsicTest" $ \ cond1 num1 -> requires (num1 ==? 22) $ 
   assert $ iNot false
   assert $ 1 + 2 ==? (3 :: Sint32)
   assert $ iNot $ 1 + 2 ==? (4 :: Sint32)
-  {-
   assert $ 3 - 2 ==? (1 :: Sint32)
   assert $ iNot $ 2 - 2 ==? (1 :: Sint32)
   assert $ 1 /=? (2 :: Sint32)
@@ -70,7 +69,6 @@ intrinsicTest = proc "intrinsicTest" $ \ cond1 num1 -> requires (num1 ==? 22) $ 
   -- A test of assumptions.
   --assume false
   --assert false
-  -}
   retVoid
 
 implies :: IBool -> IBool -> IBool
