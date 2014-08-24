@@ -70,18 +70,18 @@ assertsFold modules = mapM analyzeModule modules
 -- Convert requires to lemmas.
 require :: I.Require -> V ()
 require (I.Require a) = do
+  env <- getEnv
   a <- cond a
+  setEnv env
   m <- get
   set m { lemmas = lemmas m ++ [a] }
   where
   cond :: I.Cond -> V Expr
   cond a = case a of
-    I.CondBool a -> bool a
+    I.CondBool a -> expr a
     I.CondDeref _ ref v a -> do
-      deref <- undefined -- expr' ref >>= return . M.exprACL2 . M.Deref
-      a <- cond a
-      return $ let' (var v) deref a
-
+      expr ref >>= lookupState >>= extendEnv (var v)
+      cond a
 
 -- Rewrite statement blocks.
 block :: I.Block -> V I.Block
@@ -90,7 +90,7 @@ block = mapM stmt
 -- Defines a new verification condition (VC).
 newVC :: I.Expr -> V Expr
 newVC check = do
-  check <- bool check
+  check <- expr check
   m <- get
   let vc = "vc" ++ show (nextVCId m)
   set m { nextVCId = nextVCId m + 1, body = body m . let' vc (implies (branch m) check) }
@@ -107,6 +107,8 @@ checkVC :: Expr -> V Bool
 checkVC a = do
   m <- get
   let thm = body m $ implies (foldl and' true $ lemmas m) a
+  lift $ print thm
+  lift $ putStrLn ""
   pass <- lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm]
   --if not pass then lift (print thm) else return ()
   addVC a
@@ -121,18 +123,20 @@ proc = do
 -- Defines a branching condition (BC).
 newBC :: I.Expr -> V Expr
 newBC cond = do
-  cond <- bool cond
+  cond <- expr cond
   m <- get
   let bc = "bc" ++ show (nextBCId m)
   set m { nextBCId = nextBCId m + 1, body = body m . let' bc cond }
   return $ Var bc
 
 -- Create a new free variable.
-newFree :: V String
+newFree :: V Expr
 newFree = do
   m <- get
+  let free = "free" ++ show (nextFreeId m)
   set m { nextFreeId = nextFreeId m + 1 }
-  return $ "free" ++ show (nextFreeId m)
+  addBody $ ForAll [free]
+  return $ Var free
 
 -- Create a new env variable.
 newEnv :: V String
@@ -270,35 +274,32 @@ checkAssert stmt check = do
       lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
       return stmt
 
--- Convert an Ivory expression.
-expr :: I.Expr -> V Expr
-expr = undefined -- a = expr' a >>= return . M.exprACL2
-
 -- Convert an Ivory boolean expression to ACL2.
-bool :: I.Expr -> V Expr
-bool = undefined -- a = expr a >>= return . A.not' . A.zip'
+--bool :: I.Expr -> V Expr
+--bool = undefined -- a = expr a >>= return . A.not' . A.zip'
 
--- Convert an Ivory expression to a CLL expression to reuse the CLL-to-ACL2 infrastructure.
--- Unsupported expressions are converted to free variables.
-{-
-expr' :: I.Expr -> V M.Expr
-expr' a = case a of
-  I.ExpSym      a       -> return $ M.Var a
-  I.ExpVar      a       -> return $ M.Var $ var a
-  I.ExpLit      a       -> return $ M.Literal $ lit a
-  I.ExpIndex    _ a _ b -> do { a <- expr' a; b <- expr' b; return $ M.ArrayIndex  (M.Deref a) b }
-  I.ExpLabel    _ a b   -> do { a <- expr' a;               return $ M.StructIndex (M.Deref a) b }
-  I.ExpToIx     a _     -> expr' a   -- Is it ok to ignore the maximum bound?
-  I.ExpSafeCast _ a     -> expr' a
-  I.ExpOp       op args -> case intrinsic op of
-    Just i  -> do { args <- mapM expr' args; return $ M.Intrinsic i args }
-    Nothing -> newFree >>= return . M.Var
-  -- Unsupported expressions become free varaibles.
-  _ -> newFree >>= return . M.Var
+-- Convert an Ivory expression.  Unsupported expressions are converted to free variables (ForAll a).
+expr :: I.Expr -> V Expr
+expr a = case a of
+  I.ExpSym      a       -> return $ Var a
+  I.ExpVar      a       -> return $ Var $ var a
+  I.ExpLit      a       -> case a of
+    I.LitBool    a -> return $ Bool    a
+    I.LitInteger a -> return $ Integer a
+    _ -> newFree
+  I.ExpIndex    _ a _ b -> do { a <- expr a >>= lookupState; b <- expr b; return $ ArrayProj a b }
+  I.ExpLabel    _ a b   -> do { a <- expr a >>= lookupState; return $ RecordProj a b }
+  I.ExpToIx     a _     -> expr a   -- Is it ok to ignore the maximum bound?
+  I.ExpSafeCast _ a     -> expr a
+  I.ExpOp       op args -> do
+    args <- mapM expr args
+    intrinsic op args
+  _ -> newFree
 
--- Convert Ivory intrinsitcs to Mira intrinsics.
-intrinsic :: I.ExpOp -> Maybe M.Intrinsic
-intrinsic op = case op of
+-- Convert Ivory intrinsitcs.
+intrinsic :: I.ExpOp -> [Expr] -> V Expr
+intrinsic op args = case op of
+  {-
   I.ExpEq   _        -> Just M.Eq
   I.ExpNeq  _        -> Just M.Neq
   I.ExpCond          -> Just M.Cond  
@@ -306,9 +307,11 @@ intrinsic op = case op of
   I.ExpGt   True  _  -> Just M.Ge
   I.ExpLt   False _  -> Just M.Lt
   I.ExpLt   True  _  -> Just M.Le
-  I.ExpNot           -> Just M.Not   
-  I.ExpAnd           -> Just M.And   
-  I.ExpOr            -> Just M.Or    
+  -}
+  I.ExpNot           -> return $ not' (args !! 0)
+  I.ExpAnd           -> return $ and' (args !! 0) (args !! 1)
+  I.ExpOr            -> return $ or'  (args !! 0) (args !! 1)
+  {-
   I.ExpMul           -> Just M.Mul   
   I.ExpMod           -> Just M.Mod   
   I.ExpAdd           -> Just M.Add   
@@ -316,11 +319,11 @@ intrinsic op = case op of
   I.ExpNegate        -> Just M.Negate
   I.ExpAbs           -> Just M.Abs   
   I.ExpSignum        -> Just M.Signum
-  _                  -> Nothing
--}
+  -}
+  _                  -> newFree
 
 acl2 :: Expr -> A.Expr
-acl2 = undefined
+acl2 = const A.t  -- XXX
 
 data Expr
   = Var         String
@@ -336,28 +339,30 @@ data Expr
   | UniOp       UniOp Expr
   | BinOp       BinOp Expr Expr
   | If          Expr Expr Expr
-  | Const       Const
+  | Bool        Bool
+  | Integer     Integer
+  deriving Eq
 
-data UniOp = Not | Length
-data BinOp = And | Or | Implies
-data Const = Bool Bool
+data UniOp = Not | Length deriving Eq
+data BinOp = And | Or | Implies deriving Eq
 
 instance Show Expr where
   show a = case a of
     Var         a     -> a
-    ForAll      a b   -> printf "forall %s .\n%s" (intercalate " " a) (show b)
+    ForAll      a b   -> printf "forall %s in\n%s" (intercalate " " a) (show b)
     RecordNil         -> printf "[]"
-    RecordCons  a b c -> printf "(%s, %s) : %s" a (show b) (show c)
-    RecordProj  a b   -> printf "%s(%s)" (show a) b
+    RecordCons  a b c -> printf "(\"%s\", %s) : %s" a (show b) (show c)
+    RecordProj  a b   -> printf "%s(\"%s\")" (show a) b
     ArrayNil          -> printf "[]"
     ArrayCons   a b   -> printf "%s : %s" (show a) (show b)
     ArrayProj   a b   -> printf "%s[%s]"  (show a) (show b)
     ArrayUpdate a b c -> printf "update %s %s %s" (show a) (show b) (show c)
     Let         a b c -> printf "let %s = %s in\n%s" a (show b) (show c)
     UniOp       a b   -> printf "(%s %s)" (show a) (show b)
-    BinOp       a b c -> printf "(%s %s %s)" (show b) (show a) (show b)
+    BinOp       a b c -> printf "(%s %s %s)" (show b) (show a) (show c)
     If          a b c -> printf "(if %s then %s else %s)" (show a) (show b) (show c)
-    Const       a     -> show a
+    Bool        a     -> if a then "true" else "false"
+    Integer a -> show a
 
 instance Show UniOp where
   show a = case a of
@@ -370,16 +375,44 @@ instance Show BinOp where
     Or  -> "||"
     Implies -> "->"
 
-instance Show Const where
-  show a = case a of
-    Bool a -> if a then "true" else "false"
-
 let' = Let
-not' = UniOp Not
-and' = BinOp And
-or'  = BinOp Or
-true = Const $ Bool True
-false = Const $ Bool False
-implies = BinOp Implies
+
+--not' = UniOp Not
+not' a = case a of
+  Bool a -> Bool $ not a
+  a      -> UniOp Not a
+
+--and' = BinOp And
+and' a b = case (a, b) of
+  (Bool a, Bool b) -> Bool $ a && b
+  (Bool False, _)  -> false
+  (_, Bool False)  -> false
+  (Bool True, b)   -> b
+  (a, Bool True)   -> a
+  (a, b)
+    | a == b       -> a
+    | otherwise    -> BinOp And a b
+
+--or' = BinOp Or
+or' a b = case (a, b) of
+  (Bool a, Bool b) -> Bool $ a || b
+  (Bool True, _)   -> true
+  (_, Bool True)   -> true
+  (Bool False, b)  -> b
+  (a, Bool False)  -> a
+  (a, b)
+    | a == b       -> a
+    | otherwise    -> BinOp Or a b
+
+--implies = BinOp Implies
+implies a b = case (a, b) of
+  (Bool a, b)      -> not' (Bool a) `or'` b
+  (a, b)
+    | a == b       -> true
+    | otherwise    -> BinOp Implies a b
+
+true  = Bool True
+false = Bool False
 if' = If
 length' = UniOp Length
+
