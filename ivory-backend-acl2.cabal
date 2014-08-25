@@ -29,6 +29,7 @@ library
     Mira.CPSConvert
     Mira.Expr
     Mira.RecTopoSort
+    Mira.VC
   hs-source-dirs: src
   ghc-options: -W
 
