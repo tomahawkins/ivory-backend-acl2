@@ -54,16 +54,12 @@ assertsFold modules = mapM analyzeModule modules
         , nextEnvId   = 1
         , nextStateId = 1
         , procName    = I.procSym proc
-        , body        = forAll ("state0" : args) . let' "env0" (initEnv args)
+        , body        = forAll ("state0" : args) . let' "env0" (Record [ (a, Var a) | a <- args])
         , branch      = true
         , lemmas      = []
         , env         = Var "env0"
         , state       = Var "state0"
         }
-      initEnv :: [String] -> Expr
-      initEnv a = case a of
-        [] -> RecordNil
-        a : b -> RecordCons a (Var a) $ initEnv b
 
 -- Convert requires to lemmas.
 require :: I.Require -> V ()
@@ -108,10 +104,14 @@ addVC a = do
 checkVC :: Expr -> V Bool
 checkVC a = do
   m <- get
-  let thm = optimize $ body m $ implies (foldl (&&.) true $ lemmas m) a
+  let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
+      thm' = optimize thm
+  lift $ putStrLn "VC:"
   lift $ print thm
+  lift $ putStrLn "\nOptimized VC:"
+  lift $ print thm'
   lift $ putStrLn ""
-  pass <- case thm of
+  pass <- case thm' of
     Bool a -> return a
     thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm]
   --if not pass then lift (print thm) else return ()
@@ -168,13 +168,13 @@ extendEnv :: String -> Expr -> V ()
 extendEnv a b = do
   env0 <- getEnv
   env1 <- newEnv
-  addBody $ let' env1 $ RecordCons a b env0
+  addBody $ let' env1 $ RecordOverlay (Record [(a, b)]) env0
   setEnv $ Var env1
 
 lookupEnv :: String -> V Expr
 lookupEnv a = do
   env <- getEnv
-  return $ RecordProj env a
+  return $ RecordProject env a
 
 -- Create a new state variable and sets it as the current state.
 newState :: (Expr -> Expr) -> V ()
@@ -197,7 +197,7 @@ getState = do
 extendState :: Expr -> V Expr
 extendState a = do
   state0 <- getState
-  newState $ \ state0 -> ArrayCons state0 a
+  newState $ \ state0 -> ArrayAppend state0 $ Array [a]
   return $ length' state0
 
 -- Updates a state value.
@@ -208,7 +208,7 @@ updateState ref value = newState $ ArrayUpdate ref value
 lookupState :: Expr -> V Expr
 lookupState ref = do
   state <- getState
-  return $ ArrayProj state ref
+  return $ ArrayProject state ref
 
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
@@ -291,8 +291,8 @@ expr a = case a of
     I.LitBool    a -> return $ Bool    a
     I.LitInteger a -> return $ Integer a
     _ -> newFree
-  I.ExpIndex    _ a _ b -> do { a <- expr a >>= lookupState; b <- expr b; return $ ArrayProj a b }
-  I.ExpLabel    _ a b   -> do { a <- expr a >>= lookupState; return $ RecordProj a b }
+  I.ExpIndex    _ a _ b -> do { a <- expr a >>= lookupState; b <- expr b; return $ ArrayProject a b }
+  I.ExpLabel    _ a b   -> do { a <- expr a >>= lookupState; return $ RecordProject a b }
   I.ExpToIx     a _     -> expr a   -- Is it ok to ignore the maximum bound?
   I.ExpSafeCast _ a     -> expr a
   I.ExpOp       op args -> do

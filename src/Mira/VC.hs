@@ -25,21 +25,21 @@ import Data.List
 import Text.Printf
 
 data Expr
-  = Var         String
-  | ForAll      String Expr
-  | Let         String Expr Expr
-  | RecordNil
-  | RecordCons  String Expr Expr  -- fieldName fieldValue record
-  | RecordProj  Expr String
-  | ArrayNil
-  | ArrayCons   Expr Expr  -- array item    Cons backwards to preserve indices.
-  | ArrayProj   Expr Expr
-  | ArrayUpdate Expr Expr Expr  -- index value array
-  | UniOp       UniOp Expr
-  | BinOp       BinOp Expr Expr
-  | If          Expr Expr Expr
-  | Bool        Bool
-  | Integer     Integer
+  = Var           String
+  | ForAll        String Expr
+  | Let           String Expr Expr
+  | Record        [(String, Expr)]
+  | RecordOverlay Expr Expr       -- overlay first over second
+  | RecordProject Expr String
+  | Array         [Expr]
+  | ArrayAppend   Expr Expr
+  | ArrayProject  Expr Expr
+  | ArrayUpdate   Expr Expr Expr  -- index newValue oldArray
+  | UniOp         UniOp Expr
+  | BinOp         BinOp Expr Expr
+  | If            Expr Expr Expr
+  | Bool          Bool
+  | Integer       Integer
   deriving Eq
 
 data UniOp
@@ -65,21 +65,21 @@ data BinOp
 
 instance Show Expr where
   show a = case a of
-    Var         a     -> a
-    ForAll      a b   -> printf "forall %s in\n%s" a (show b)
-    RecordNil         -> printf "[]"
-    RecordCons  a b c -> printf "(\"%s\", %s) : %s" a (show b) (show c)
-    RecordProj  a b   -> printf "%s(\"%s\")" (show a) b
-    ArrayNil          -> printf "[]"
-    ArrayCons   a b   -> printf "%s : %s" (show a) (show b)
-    ArrayProj   a b   -> printf "%s[%s]"  (show a) (show b)
-    ArrayUpdate a b c -> printf "update %s %s %s" (show a) (show b) (show c)
-    Let         a b c -> printf "let %s = %s in\n%s" a (show b) (show c)
-    UniOp       a b   -> printf "(%s %s)" (show a) (show b)
-    BinOp       a b c -> printf "(%s %s %s)" (show b) (show a) (show c)
-    If          a b c -> printf "(if %s then %s else %s)" (show a) (show b) (show c)
-    Bool        a     -> if a then "true" else "false"
-    Integer     a     -> show a
+    Var           a     -> a
+    ForAll        a b   -> printf "forall %s in\n%s" a (show b)
+    Record        a     -> printf "{%s}" $ intercalate ", " [ a ++ " : " ++ show b | (a, b) <- a ]
+    RecordOverlay a b   -> printf "(overlay %s %s)" (show a) (show b)
+    RecordProject a b   -> printf "%s.%s" (show a) b
+    Array         a     -> printf "[%s]" $ intercalate ", " $ map show a
+    ArrayAppend   a b   -> printf "(%s ++ %s)" (show a) (show b)
+    ArrayUpdate   a b c -> printf "(update %s %s %s)" (show a) (show b) (show c)
+    ArrayProject  a b   -> printf "%s[%s]"  (show a) (show b)
+    Let           a b c -> printf "let %s = %s in\n%s" a (show b) (show c)
+    UniOp         a b   -> printf "(%s %s)" (show a) (show b)
+    BinOp         a b c -> printf "(%s %s %s)" (show b) (show a) (show c)
+    If            a b c -> printf "(if %s then %s else %s)" (show a) (show b) (show c)
+    Bool          a     -> if a then "true" else "false"
+    Integer       a     -> show a
 
 instance Show UniOp where
   show a = case a of
@@ -139,44 +139,55 @@ optimize = optRemoveNullEffect . optConstantProp
 optRemoveNullEffect :: Expr -> Expr
 optRemoveNullEffect a = case a of
   Let a b c
-    | elem a $ varsReferenced $ opt c -> Let a (opt b) (opt c)
+    | elem a $ vars $ opt c -> Let a (opt b) (opt c)
     | otherwise -> opt c
   ForAll a b
-    | elem a $ varsReferenced $ opt b -> ForAll a $ opt b
+    | elem a $ vars $ opt b -> ForAll a $ opt b
     | otherwise -> opt b
+  Var a -> Var a
+  If a b c -> If (opt a) (opt b) (opt c)
+  UniOp a b -> UniOp a (opt b)
+  BinOp a b c -> BinOp a (opt b) (opt c)
+  Bool    a -> Bool a
+  Integer a -> Integer a
+  Record        a     -> Record [ (a, opt b) | (a, b) <- a ]
+  RecordOverlay a b   -> RecordOverlay (opt a) (opt b)
+  RecordProject a b   -> RecordProject (opt a) b
+  Array         a     -> Array        (map opt a)
+  ArrayAppend   a b   -> ArrayAppend  (opt a) (opt b)
+  ArrayUpdate   a b c -> ArrayUpdate  (opt a) (opt b) (opt c)
+  ArrayProject  a b   -> ArrayProject (opt a) (opt b)
   where
   opt = optRemoveNullEffect
 
-varsReferenced :: Expr -> [String]
-varsReferenced a = case a of
-  Var    a     -> [a]
-  Let    a b c -> vars b ++ [ v | v <- vars c, v /= a ]
-  ForAll a b   -> [ v | v <- vars b, v /= a ]
-  If a b c -> vars a ++ vars b ++ vars c
-  UniOp _ a -> vars a
-  BinOp _ a b -> vars a ++ vars b
-  RecordNil -> []
-  RecordCons _ b c -> vars b ++ vars c
-  RecordProj a _ -> vars a
-  ArrayNil -> []
-  ArrayCons a b -> vars a ++ vars b
-  ArrayProj a b -> vars a ++ vars b
-  ArrayUpdate a b c -> vars a ++ vars b ++ vars c
-  Bool _ -> []
-  Integer _ -> []
-  where
-  vars = varsReferenced
+  vars :: Expr -> [String]
+  vars a = case a of
+    Var    a     -> [a]
+    Let    a b c -> vars b ++ [ v | v <- vars c, v /= a ]
+    ForAll a b   -> [ v | v <- vars b, v /= a ]
+    If a b c -> vars a ++ vars b ++ vars c
+    UniOp _ a -> vars a
+    BinOp _ a b -> vars a ++ vars b
+    Bool _ -> []
+    Integer _ -> []
+    Record        a     -> concatMap vars $ snd $ unzip a
+    RecordOverlay a b   -> vars a ++ vars b
+    RecordProject a _   -> vars a
+    Array         a     -> concatMap vars a
+    ArrayAppend   a b   -> vars a ++ vars b
+    ArrayProject  a b   -> vars a ++ vars b
+    ArrayUpdate   a b c -> vars a ++ vars b ++ vars c
 
 optConstantProp :: Expr -> Expr
 optConstantProp = optConstantProp' []
 
 optConstantProp' :: [(String, Expr)] -> Expr -> Expr
 optConstantProp' env a = case a of
-  UniOp Not a -> case optimize a of
+  UniOp Not a -> case opt a of
     Bool a -> Bool $ not a
     a      -> UniOp Not a
 
-  BinOp And a b -> case (optimize a, optimize b) of
+  BinOp And a b -> case (opt a, opt b) of
     (Bool a, Bool b) -> Bool $ a && b
     (Bool False, _)  -> false
     (_, Bool False)  -> false
@@ -186,7 +197,7 @@ optConstantProp' env a = case a of
       | a == b       -> a
       | otherwise    -> BinOp And a b
 
-  BinOp Or a b -> case (optimize a, optimize b) of
+  BinOp Or a b -> case (opt a, opt b) of
     (Bool a, Bool b) -> Bool $ a || b
     (Bool True, _)   -> true
     (_, Bool True)   -> true
@@ -196,7 +207,7 @@ optConstantProp' env a = case a of
       | a == b       -> a
       | otherwise    -> BinOp Or a b
 
-  BinOp Implies a b -> case (optimize a, optimize b) of
+  BinOp Implies a b -> case (opt a, opt b) of
     (Bool a, Bool b) -> Bool $ not a || b
     (Bool False, _)  -> true
     (_, Bool True)   -> true
@@ -205,85 +216,111 @@ optConstantProp' env a = case a of
       | a == b       -> true
       | otherwise    -> BinOp Implies a b
 
-  If a b c -> case (optimize a, optimize b, optimize c) of
-    (Bool a, b, c) -> if a then b else c
-    (a, b, c)
-      | b == c -> b
-      | otherwise -> If a b c
-
-  BinOp Eq a b -> case (optimize a, optimize b) of
+  BinOp Eq a b -> case (opt a, opt b) of
     (Bool a, Bool b)       -> Bool $ a == b
     (Integer a, Integer b) -> Bool $ a == b
     (a, b)
       | a == b -> true
       | otherwise -> BinOp Eq a b
 
-  BinOp Lt a b -> case (optimize a, optimize b) of
+  BinOp Lt a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Bool $ a < b
     (a, b)
       | a == b -> false
       | otherwise -> BinOp Lt a b
 
-  BinOp Gt a b -> case (optimize a, optimize b) of
+  BinOp Gt a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Bool $ a > b
     (a, b)
       | a == b -> false
       | otherwise -> BinOp Gt a b
 
-  BinOp Add a b -> case (optimize a, optimize b) of
+  BinOp Add a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Integer $ a + b
     (a, b) -> BinOp Add a b
 
-  BinOp Sub a b -> case (optimize a, optimize b) of
+  BinOp Sub a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Integer $ a - b
     (a, b) -> BinOp Sub a b
 
-  BinOp Mul a b -> case (optimize a, optimize b) of
+  BinOp Mul a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Integer $ a * b
     (a, b) -> BinOp Mul a b
 
-  BinOp Mod a b -> case (optimize a, optimize b) of
+  BinOp Mod a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Integer $ mod a b
     (a, b) -> BinOp Mod a b
 
-  UniOp Negate a -> case optimize a of
+  UniOp Negate a -> case opt a of
     Integer a -> Integer $ negate a
     a -> UniOp Negate a
 
-  UniOp Abs a -> case optimize a of
+  UniOp Abs a -> case opt a of
     Integer a -> Integer $ abs a
     a -> UniOp Abs a
 
-  UniOp Signum a -> case optimize a of
+  UniOp Signum a -> case opt a of
     Integer a -> Integer $ signum a
     a -> UniOp Signum a
 
-  UniOp Length a -> UniOp Length a
+  UniOp Length a -> case opt a of
+    Array a -> Integer $ fromIntegral $ length a
+    a -> UniOp Length a
 
   Var    a     -> case lookup a env of
     Nothing -> Var a
     Just a  -> a
 
-  Let    a b c -> case optimize b of
-    Bool    b -> optimize' ((a, Bool    b) : env) c
-    Integer b -> optimize' ((a, Integer b) : env) c
-    b -> Let a b (optimize c)
+  Let    a b c -> case opt b of
+    Bool    b -> opt' ((a, Bool    b) : env) c
+    Integer b -> opt' ((a, Integer b) : env) c
+    Record  b -> opt' ((a, Record  b) : env) c
+    Array   b -> opt' ((a, Array   b) : env) c
+    b -> Let a b (opt c)
 
-  ForAll a b   -> ForAll a $ optimize b
+  ForAll a b   -> ForAll a $ opt' [ (a', b) | (a', b) <- env, a' /= a ]  b
 
-  RecordNil        -> RecordNil
-  RecordCons a b c -> RecordCons a (optimize b) (optimize c)
-  RecordProj a b   -> RecordProj (optimize a) b
+  If a b c -> case (opt a, opt b, opt c) of
+    (Bool a, b, c) -> if a then b else c
+    (a, b, c)
+      | b == c -> b
+      | otherwise -> If a b c
 
-  ArrayNil          -> ArrayNil
-  ArrayCons   a b   -> ArrayCons (optimize a) (optimize b)
-  ArrayProj   a b   -> ArrayProj (optimize a) (optimize b)
-  ArrayUpdate a b c -> ArrayUpdate (optimize a) (optimize b) (optimize c)
+  Record        a     -> Record [ (a, opt b) | (a, b) <- a ]
+  RecordOverlay a b   -> case (opt a, opt b) of
+    (Record a, Record b) -> Record $ a ++ [ b | b <- b, notElem (fst b) $ fst $ unzip a ]
+    (a, b)               -> RecordOverlay a b
+  RecordProject a b   -> case opt a of
+    Record a -> case lookup b a of
+      Nothing -> error $ printf "Record %s doesn't have field '%s'." (show (Record a)) b
+      Just b  -> b
+    a -> RecordProject a b
+
+  Array       a     -> Array $ map opt a
+  ArrayAppend a b   -> case (opt a, opt b) of
+    (Array a, Array b) -> Array $ a ++ b
+    (a, b)             -> ArrayAppend a b
+
+  ArrayProject a b   -> case (opt a, opt b) of
+    (Integer a', Array b)
+      | a < length b -> b !! a
+      | otherwise -> error "Index exceeds bounds of array."
+      where
+      a = fromInteger a'
+    (a, b) -> ArrayProject a b
+
+  ArrayUpdate  a b c -> case (opt a, opt b, opt c) of
+    (Integer a', b, Array c)
+      | a < length c -> Array $ take a c ++ [b] ++ drop (a + 1) c
+      | otherwise -> error "Index exceeds bounds of array."
+      where
+      a = fromInteger a'
+    (a, b, c) -> ArrayUpdate a b c
 
   Bool    a -> Bool a
   Integer a -> Integer a
 
   where
-  optimize  = optConstantProp' env
-  optimize' = optConstantProp'
+  opt  = optConstantProp' env
+  opt' = optConstantProp'
 
