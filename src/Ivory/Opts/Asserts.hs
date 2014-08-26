@@ -54,7 +54,7 @@ assertsFold modules = mapM analyzeModule modules
         , nextEnvId   = 1
         , nextStateId = 1
         , procName    = I.procSym proc
-        , body        = ForAll ("state0" : args) . let' "env0" (initEnv args)
+        , body        = forAll ("state0" : args) . let' "env0" (initEnv args)
         , branch      = true
         , lemmas      = []
         , env         = Var "env0"
@@ -108,7 +108,7 @@ addVC a = do
 checkVC :: Expr -> V Bool
 checkVC a = do
   m <- get
-  let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
+  let thm = optimize $ body m $ implies (foldl (&&.) true $ lemmas m) a
   lift $ print thm
   lift $ putStrLn ""
   pass <- case thm of
@@ -139,7 +139,7 @@ newFree = do
   m <- get
   let free = "free" ++ show (nextFreeId m)
   set m { nextFreeId = nextFreeId m + 1 }
-  addBody $ ForAll [free]
+  addBody $ forAll [free]
   return $ Var free
 
 -- Create a new env variable.
