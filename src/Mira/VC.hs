@@ -9,6 +9,7 @@ module Mira.VC
   , (&&.)
   , (||.)
   , implies
+  , unit
   , true
   , false
   , if'
@@ -38,6 +39,7 @@ data Expr
   | UniOp         UniOp Expr
   | BinOp         BinOp Expr Expr
   | If            Expr Expr Expr
+  | Unit
   | Bool          Bool
   | Integer       Integer
   deriving Eq
@@ -78,6 +80,7 @@ instance Show Expr where
     UniOp         a b   -> printf "(%s %s)" (show a) (show b)
     BinOp         a b c -> printf "(%s %s %s)" (show b) (show a) (show c)
     If            a b c -> printf "(if %s then %s else %s)" (show a) (show b) (show c)
+    Unit                -> "()"
     Bool          a     -> if a then "true" else "false"
     Integer       a     -> show a
 
@@ -122,6 +125,7 @@ not' = UniOp Not
 (&&.) = BinOp And
 (||.) = BinOp Or
 implies = BinOp Implies
+unit  = Unit
 true  = Bool True
 false = Bool False
 if' = If
@@ -148,6 +152,7 @@ optRemoveNullEffect a = case a of
   If a b c -> If (opt a) (opt b) (opt c)
   UniOp a b -> UniOp a (opt b)
   BinOp a b c -> BinOp a (opt b) (opt c)
+  Unit      -> Unit
   Bool    a -> Bool a
   Integer a -> Integer a
   Record        a     -> Record [ (a, opt b) | (a, b) <- a ]
@@ -168,7 +173,8 @@ optRemoveNullEffect a = case a of
     If a b c -> vars a ++ vars b ++ vars c
     UniOp _ a -> vars a
     BinOp _ a b -> vars a ++ vars b
-    Bool _ -> []
+    Unit      -> []
+    Bool    _ -> []
     Integer _ -> []
     Record        a     -> concatMap vars $ snd $ unzip a
     RecordOverlay a b   -> vars a ++ vars b
@@ -183,6 +189,10 @@ optConstantProp = optConstantProp' []
 
 optConstantProp' :: [(String, Expr)] -> Expr -> Expr
 optConstantProp' env a = case a of
+  Unit      -> Unit
+  Bool    a -> Bool a
+  Integer a -> Integer a
+
   UniOp Not a -> case opt a of
     Bool a -> Bool $ not a
     a      -> UniOp Not a
@@ -272,6 +282,7 @@ optConstantProp' env a = case a of
     Just a  -> a
 
   Let    a b c -> case opt b of
+    Unit      -> opt' ((a, Unit     ) : env) c
     Bool    b -> opt' ((a, Bool    b) : env) c
     Integer b -> opt' ((a, Integer b) : env) c
     Record  b -> opt' ((a, Record  b) : env) c
@@ -317,8 +328,6 @@ optConstantProp' env a = case a of
       a = fromInteger a'
     (a, b, c) -> ArrayUpdate a b c
 
-  Bool    a -> Bool a
-  Integer a -> Integer a
 
   where
   opt  = optConstantProp' env

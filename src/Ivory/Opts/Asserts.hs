@@ -3,6 +3,7 @@ module Ivory.Opts.Asserts
   ( assertsFold
   ) where
 
+import Data.Maybe
 import MonadLib
 
 import qualified Ivory.Language.Syntax.AST  as I
@@ -24,6 +25,7 @@ data VDB = VDB
   , lemmas      :: [Expr]
   , env         :: Expr
   , state       :: Expr
+  , returns     :: [Expr]
   }
 
 -- Verification monad.
@@ -41,10 +43,12 @@ assertsFold modules = mapM analyzeModule modules
     where
     analyzeProc :: I.Proc -> IO I.Proc
     analyzeProc proc = do
-      b <- runStateT init $ do
+      (p, _) <- runStateT init $ do
         mapM_ require $ I.procRequires proc
-        block $ I.procBody proc
-      return $ proc { I.procBody = fst b }
+        body <- block $ I.procBody proc
+        ensures <- mapM ensure (I.procEnsures proc) >>= return . catMaybes
+        return $ proc { I.procBody = body, I.procEnsures = ensures }
+      return p
       where
       args = map (var . I.tValue) $ I.procArgs proc
       init = VDB
@@ -59,6 +63,7 @@ assertsFold modules = mapM analyzeModule modules
         , lemmas      = []
         , env         = Var "env0"
         , state       = Var "state0"
+        , returns     = []
         }
 
 -- Convert requires to lemmas.
@@ -76,6 +81,10 @@ require (I.Require a) = do
     I.CondDeref _ ref v a -> do
       expr ref >>= lookupState >>= extendEnv (var v)
       cond a
+
+-- Check ensures and remove if possible.
+ensure :: I.Ensure -> V (Maybe I.Ensure)
+ensure ensure@(I.Ensure a) = return $ Just ensure  --XXX
 
 -- Rewrite statement blocks.
 block :: I.Block -> V I.Block
@@ -210,6 +219,12 @@ lookupState ref = do
   state <- getState
   return $ ArrayProject state ref
 
+-- Add a return expression.
+addReturn :: Expr -> V ()
+addReturn a = do
+  m <- get
+  set m { returns = returns m ++ [a] }
+
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
 stmt a = case a of
@@ -253,10 +268,11 @@ stmt a = case a of
     lookupState r2 >>= updateState r1
     return a
 
+  I.Return b       -> expr (I.tValue b) >>= addReturn >> return a
+  I.ReturnVoid     -> addReturn unit >> return a
+
   -- XXX
   I.Assign _ _ _   -> return a
-  I.Return _       -> return a
-  I.ReturnVoid     -> return a
   I.Local _ _ _    -> return a
   I.Call  _ _ _ _  -> return a
   I.Forever _      -> return a
