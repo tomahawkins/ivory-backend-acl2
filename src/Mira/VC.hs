@@ -328,7 +328,6 @@ optConstantProp' env a = case a of
       a = fromInteger a'
     (a, b, c) -> ArrayUpdate a b c
 
-
   where
   opt  = optConstantProp' env
   opt' = optConstantProp'

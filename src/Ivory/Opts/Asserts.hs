@@ -84,7 +84,7 @@ require (I.Require a) = do
 
 -- Check ensures and remove if possible.
 ensure :: I.Ensure -> V (Maybe I.Ensure)
-ensure ensure@(I.Ensure a) = return $ Just ensure  --XXX
+ensure ensure@(I.Ensure _) = return $ Just ensure  --XXX
 
 -- Rewrite statement blocks.
 block :: I.Block -> V I.Block
@@ -271,14 +271,31 @@ stmt a = case a of
   I.Return b       -> expr (I.tValue b) >>= addReturn >> return a
   I.ReturnVoid     -> addReturn unit >> return a
 
+  I.Local t v i    -> do
+    init i >>= extendEnv (var v)
+    return a
+    where
+    init :: I.Init -> V Expr
+    init a = case (t, a) of
+      (I.TyBool,   I.InitZero) -> return $ Bool False
+      (I.TyInt _,  I.InitZero) -> return $ Integer 0
+      (I.TyWord _, I.InitZero) -> return $ Integer 0
+      (_, I.InitExpr _ a) -> expr a
+      (_, I.InitStruct a) -> do { b <- mapM init $ snd $ unzip a; return $ Record $ zip (fst $ unzip a) b }
+      (_, I.InitArray  a) -> do { a <- mapM init a; return $ Array a }
+      _ -> error "Unexpected Init."
+
+  I.Comment _      -> return a
+
   -- XXX
+  _ -> error $ "Unsupported stmt: " ++ show a
+  {-
   I.Assign _ _ _   -> return a
-  I.Local _ _ _    -> return a
   I.Call  _ _ _ _  -> return a
   I.Forever _      -> return a
   I.Loop _ _ _ _   -> return a
   I.Break          -> return a
-  I.Comment _      -> return a
+  -}
   
 
 -- Verified assertions are turned into comments.

@@ -1,12 +1,12 @@
 .PHONY: all
-all: test
+all: test.log
 
-.PHONY: test
-test: Testcases.hs
+test.log: Testcases.hs src/Ivory/Opts/*.hs src/Ivory/Compile/*.hs src/Mira/*.hs
 	cabal build && cabal install
-	runhaskell -W Testcases.hs
+	runhaskell -W Testcases.hs | tee test.log
 
 .PHONY: clean
 clean:
 	cabal clean
+	-rm test.log
 
