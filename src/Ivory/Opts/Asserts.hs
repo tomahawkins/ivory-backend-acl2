@@ -19,7 +19,8 @@ data VDB = VDB
   , nextFreeId  :: Int
   , nextEnvId   :: Int
   , nextStateId :: Int
-  , procName    :: String
+  , procName'   :: String
+  , procs       :: [I.Proc]
   , body        :: Expr -> Expr
   , branch      :: Expr
   , lemmas      :: [Expr]
@@ -44,9 +45,9 @@ assertsFold modules = mapM analyzeModule modules
     analyzeProc :: I.Proc -> IO I.Proc
     analyzeProc proc = do
       (p, _) <- runStateT init $ do
-        mapM_ require $ I.procRequires proc
+        mapM_ assumeRequire $ I.procRequires proc
         body <- block $ I.procBody proc
-        ensures <- mapM ensure (I.procEnsures proc) >>= return . catMaybes
+        ensures <- mapM checkEnsure (I.procEnsures proc) >>= return . catMaybes
         return $ proc { I.procBody = body, I.procEnsures = ensures }
       return p
       where
@@ -57,7 +58,8 @@ assertsFold modules = mapM analyzeModule modules
         , nextFreeId  = 0
         , nextEnvId   = 1
         , nextStateId = 1
-        , procName    = I.procSym proc
+        , procName'   = I.procSym proc
+        , procs       = concat [ I.public (I.modProcs m) ++ I.private (I.modProcs m) | m <- modules ]
         , body        = forAll ("state0" : args) . let' "env0" (Record [ (a, Var a) | a <- args])
         , branch      = true
         , lemmas      = []
@@ -67,15 +69,8 @@ assertsFold modules = mapM analyzeModule modules
         }
 
 -- Convert requires to lemmas.
-require :: I.Require -> V ()
-require (I.Require a) = condition a >>= addLemma
-
--- Check ensures on all return points and remove if possible.
-ensure :: I.Ensure -> V (Maybe I.Ensure)
-ensure ensure@(I.Ensure a) = do
-  cond <- condition a
-  pass <- getReturns >>= mapM (checkEnsure ensure . retval cond) >>= return . and
-  if pass then return $ Just ensure else return Nothing
+assumeRequire :: I.Require -> V ()
+assumeRequire (I.Require a) = condition a >>= addLemma
 
 -- Replace the 'retval' expressions with a return expression.
 retval :: Expr -> Expr -> Expr
@@ -154,10 +149,10 @@ checkVC a = do
   return pass
 
 -- Name of current procedure undergoing analysis.
-proc :: V String
-proc = do
+procName :: V String
+procName = do
   m <- get
-  return $ procName m
+  return $ procName' m
 
 -- Defines a branching condition (BC).
 newBC :: I.Expr -> V Expr
@@ -319,20 +314,47 @@ stmt a = case a of
 
   I.Assign _ v b   -> expr b >>= extendEnv (var v) >> return a
 
+  I.Call  _ ret f args  -> do
+    -- Check sub-requires.
+    env0 <- getEnv
+    args <- mapM (expr . I.tValue) args
+    p <- getProc (var f)
+    env1 <- newEnv
+    addBody $ let' env1 $ Record [ (var $ I.tValue a, b) | (a, b) <- zip (I.procArgs p) args ] 
+    setEnv $ Var env1
+    mapM_ (checkSubRequire $ var f) $ I.procRequires p  -- XXX Need to collect results for all call sites to be able to remove requires.
+    setEnv env0
+
+    -- Assume sub-ensures.
+    case ret of
+      Nothing -> mapM_ (assumeSubEnsure unit) $ I.procEnsures p
+      Just ret -> do
+        free <- newFree
+        extendEnv (var ret) free
+        mapM_ (assumeSubEnsure $ Var $ var ret) $ I.procEnsures p
+    
+    return a
+
   -- XXX
   _ -> error $ "Unsupported stmt: " ++ show a
   {-
-  I.Call  _ _ _ _  -> return a
-  I.Forever _      -> return a
   I.Loop _ _ _ _   -> return a
+  I.Forever _      -> return a
   I.Break          -> return a
   -}
-  
+
+getProc :: String -> V I.Proc
+getProc f = do
+  m <- get
+  case [ p | p <- procs m, I.procSym p == f ] of
+    [p] -> return p
+    []  -> error $ "Procedure not found: " ++ f
+    _   -> error $ "Multple procedures found: " ++ f
 
 -- Verified assertions are turned into comments.
 checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
 checkAssert stmt check = do
-  proc <- proc
+  proc <- procName
   check <- expr check
   vc <- newVC check
   pass <- checkVC vc
@@ -343,18 +365,37 @@ checkAssert stmt check = do
       lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
       return stmt
 
--- Check an ensure condition.
-checkEnsure :: I.Ensure -> Expr -> V Bool
-checkEnsure ensure check = do
-  proc <- proc
-  vc <- newVC check
+-- Check ensures on all return points and remove if possible.
+checkEnsure :: I.Ensure -> V (Maybe I.Ensure)
+checkEnsure ensure@(I.Ensure a) = do
+  cond <- condition a
+  pass <- getReturns >>= mapM (checkEnsureReturn . retval cond) >>= return . and
+  if pass then return $ Just ensure else return Nothing
+  where
+  -- Check an single return point.
+  checkEnsureReturn :: Expr -> V Bool
+  checkEnsureReturn check = do
+    proc <- procName
+    vc <- newVC check
+    pass <- checkVC vc
+    if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
+    return pass
+
+-- Check a sub require condition on a function call.
+checkSubRequire :: String -> I.Require -> V Bool
+checkSubRequire callee req@(I.Require a) = do
+  cond <- condition a
+  caller <- procName
+  vc <- newVC cond
   pass <- checkVC vc
-  if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
+  if pass then return () else lift $ putStrLn $ "Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req
   return pass
 
--- Convert an Ivory boolean expression to ACL2.
---bool :: I.Expr -> V Expr
---bool = undefined -- a = expr a >>= return . A.not' . A.zip'
+-- Assume a sub ensure condition when a function call returns.
+assumeSubEnsure :: Expr -> I.Ensure -> V ()
+assumeSubEnsure ret (I.Ensure a) = do
+  cond <- condition a
+  addLemma $ retval cond ret
 
 -- Convert an Ivory expression.  Unsupported expressions are converted to free variables (ForAll a).
 expr :: I.Expr -> V Expr
