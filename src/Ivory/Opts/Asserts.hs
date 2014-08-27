@@ -68,12 +68,7 @@ assertsFold modules = mapM analyzeModule modules
 
 -- Convert requires to lemmas.
 require :: I.Require -> V ()
-require (I.Require a) = do
-  env <- getEnv
-  a <- condition a
-  setEnv env
-  m <- get
-  set m { lemmas = lemmas m ++ [a] }
+require (I.Require a) = condition a >>= addLemma
 
 -- Check ensures on all return points and remove if possible.
 ensure :: I.Ensure -> V (Maybe I.Ensure)
@@ -134,8 +129,8 @@ newVC check = do
       return $ Var vc
 
 -- Adds a VC as a lemma.
-addVC :: Expr -> V ()
-addVC a = do
+addLemma :: Expr -> V ()
+addLemma a = do
   m <- get
   set m { lemmas = lemmas m ++ [a] }
 
@@ -151,10 +146,11 @@ checkVC a = do
   lift $ print thm'
   lift $ putStrLn ""
   pass <- case thm' of
+    -- Don't call ACL2 if the result is obvious.
     Bool a -> return a
-    thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm]
-  --if not pass then lift (print thm) else return ()
-  addVC a
+    --thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm']
+    thm -> lift $ A.check [A.thm $ acl2 thm]
+  addLemma a
   return pass
 
 -- Name of current procedure undergoing analysis.
@@ -172,7 +168,7 @@ newBC cond = do
   set m { nextBCId = nextBCId m + 1, body = body m . let' bc cond }
   return $ Var bc
 
--- Create a new free variable.
+-- Create a new free variable.  Used to model unmodelable Ivory constructs.
 newFree :: V Expr
 newFree = do
   m <- get
@@ -319,7 +315,7 @@ stmt a = case a of
       (_, I.InitExpr _ a) -> expr a
       (_, I.InitStruct a) -> do { b <- mapM init $ snd $ unzip a; return $ Record $ zip (fst $ unzip a) b }
       (_, I.InitArray  a) -> do { a <- mapM init a; return $ Array a }
-      _ -> error "Unexpected Init."
+      _ -> newFree
 
   I.Assign _ v b   -> expr b >>= extendEnv (var v) >> return a
 
