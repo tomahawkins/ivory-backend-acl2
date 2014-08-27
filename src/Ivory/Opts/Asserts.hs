@@ -228,6 +228,7 @@ addReturn a = do
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
 stmt a = case a of
+  I.Comment        _ -> return a
   I.Assert         b -> checkAssert a b
   I.CompilerAssert b -> checkAssert a b
   I.Assume         b -> checkAssert a b
@@ -285,12 +286,11 @@ stmt a = case a of
       (_, I.InitArray  a) -> do { a <- mapM init a; return $ Array a }
       _ -> error "Unexpected Init."
 
-  I.Comment _      -> return a
+  I.Assign _ v b   -> expr b >>= extendEnv (var v) >> return a
 
   -- XXX
   _ -> error $ "Unsupported stmt: " ++ show a
   {-
-  I.Assign _ _ _   -> return a
   I.Call  _ _ _ _  -> return a
   I.Forever _      -> return a
   I.Loop _ _ _ _   -> return a
