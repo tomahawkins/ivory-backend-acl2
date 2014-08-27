@@ -12,26 +12,6 @@ import Ivory.Compile.ACL2 (var)
 import qualified Mira.ACL2 as A
 import Mira.VC
 
--- Data carried through verification monad.
-data VDB = VDB
-  { nextVCId    :: Int
-  , nextBCId    :: Int
-  , nextFreeId  :: Int
-  , nextEnvId   :: Int
-  , nextStateId :: Int
-  , procName'   :: String
-  , procs       :: [I.Proc]
-  , body        :: Expr -> Expr
-  , branch      :: Expr
-  , lemmas      :: [Expr]
-  , env         :: Expr
-  , state       :: Expr
-  , returns     :: [Expr]
-  }
-
--- Verification monad.
-type V a = StateT VDB IO a
-
 -- | Analyze an entire Ivory program, removing as many assertions as possible.
 assertsFold :: [I.Module] -> IO [I.Module]
 assertsFold modules = mapM analyzeModule modules
@@ -68,9 +48,231 @@ assertsFold modules = mapM analyzeModule modules
         , returns     = []
         }
 
+-- Data carried through verification monad.
+data VDB = VDB
+  { nextVCId    :: Int
+  , nextBCId    :: Int
+  , nextFreeId  :: Int
+  , nextEnvId   :: Int
+  , nextStateId :: Int
+  , procName'   :: String
+  , procs       :: [I.Proc]
+  , body        :: Expr -> Expr
+  , branch      :: Expr
+  , lemmas      :: [Expr]
+  , env         :: Expr
+  , state       :: Expr
+  , returns     :: [Expr]
+  }
+
+-- Verification monad.
+type V a = StateT VDB IO a
+
+-- Defines a new verification condition (VC).
+newVC :: Expr -> V Expr
+newVC check = do
+  m <- get
+  let vc = "vc" ++ show (nextVCId m)
+      vc' = implies (branch m) check
+  case vc' of
+    Bool a -> return $ Bool a
+    _ -> do 
+      set m { nextVCId = nextVCId m + 1, body = body m . let' vc vc' }
+      return $ Var vc
+
+-- Adds a VC as a lemma.
+addLemma :: Expr -> V ()
+addLemma a = do
+  m <- get
+  set m { lemmas = lemmas m ++ [a] }
+
+-- Name of current procedure undergoing analysis.
+procName :: V String
+procName = do
+  m <- get
+  return $ procName' m
+
+-- Defines a branching condition (BC).
+newBC :: I.Expr -> V Expr
+newBC cond = do
+  cond <- expr cond
+  m <- get
+  let bc = "bc" ++ show (nextBCId m)
+  set m { nextBCId = nextBCId m + 1, body = body m . let' bc cond }
+  return $ Var bc
+
+-- Create a new free variable.  Used to model unmodelable Ivory constructs.
+newFree :: V Expr
+newFree = do
+  m <- get
+  let free = "free" ++ show (nextFreeId m)
+  set m { nextFreeId = nextFreeId m + 1 }
+  addBody $ forAll [free]
+  return $ Var free
+
+-- Add some new procedure body logic.
+addBody :: (Expr -> Expr) -> V ()
+addBody b = do
+  m <- get
+  set m { body = body m . b }
+
+-- Create a new environment variable.
+newEnv :: V String
+newEnv = do
+  m <- get
+  set m { nextEnvId = nextEnvId m + 1 }
+  return $ "env" ++ show (nextEnvId m)
+
+-- Get the current environment.
+getEnv :: V Expr
+getEnv = do
+  m <- get
+  return $ env m
+
+-- Set the current environment.
+setEnv :: Expr -> V ()
+setEnv a = do
+  m <- get
+  set m { env = a }
+
+-- Extend the current environment with a name and a value.
+extendEnv :: String -> Expr -> V ()
+extendEnv a b = do
+  env0 <- getEnv
+  env1 <- newEnv
+  addBody $ let' env1 $ RecordOverlay (Record [(a, b)]) env0
+  setEnv $ Var env1
+
+-- Lookup a name in the current environment.
+lookupEnv :: String -> V Expr
+lookupEnv a = do
+  env <- getEnv
+  return $ RecordProject env a
+
+-- Create a new state variable and sets it as the current state.
+newState :: (Expr -> Expr) -> V ()
+newState f = do
+  m <- get
+  let state0 = state m
+      state1 = "state" ++ show (nextStateId m)
+  set m
+    { nextStateId = nextStateId m + 1
+    , state = Var state1
+    , body = body m . let' state1 (f state0)
+    }
+
+-- Get the current state.
+getState :: V Expr
+getState = do
+  m <- get
+  return $ state m
+
+-- Extends the state, returns pointer (index) to added state.
+extendState :: Expr -> V Expr
+extendState a = do
+  state0 <- getState
+  newState $ \ state0 -> ArrayAppend state0 $ Array [a]
+  return $ length' state0
+
+-- Updates a state value.
+updateState :: Expr -> Expr -> V ()
+updateState ref value = newState $ ArrayUpdate ref value
+
+-- Dereference a reference.
+lookupState :: Expr -> V Expr
+lookupState ref = do
+  state <- getState
+  return $ ArrayProject state ref
+
+-- Add a return expression.
+addReturn :: Expr -> V ()
+addReturn a = do
+  m <- get
+  set m { returns = returns m ++ [a] }
+
+-- Get all the return expressions in the procedure.
+getReturns :: V [Expr]
+getReturns = do
+  m <- get
+  return $ returns m
+
+-- Get a procedure by name.
+getProc :: String -> V I.Proc
+getProc f = do
+  m <- get
+  case [ p | p <- procs m, I.procSym p == f ] of
+    [p] -> return p
+    []  -> error $ "Procedure not found: " ++ f
+    _   -> error $ "Multple procedures found: " ++ f
+
 -- Convert requires to lemmas.
 assumeRequire :: I.Require -> V ()
 assumeRequire (I.Require a) = condition a >>= addLemma
+
+-- Check ensures on all return points and remove if possible.
+checkEnsure :: I.Ensure -> V (Maybe I.Ensure)
+checkEnsure ensure@(I.Ensure a) = do
+  cond <- condition a
+  pass <- getReturns >>= mapM (checkEnsureReturn . retval cond) >>= return . and
+  if pass then return $ Just ensure else return Nothing
+  where
+  -- Check an single return point.
+  checkEnsureReturn :: Expr -> V Bool
+  checkEnsureReturn check = do
+    proc <- procName
+    vc <- newVC check
+    pass <- checkVC vc
+    if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
+    return pass
+
+-- Check a sub require condition on a function call.
+checkSubRequire :: String -> I.Require -> V Bool
+checkSubRequire callee req@(I.Require a) = do
+  cond <- condition a
+  caller <- procName
+  vc <- newVC cond
+  pass <- checkVC vc
+  if pass then return () else lift $ putStrLn $ "Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req
+  return pass
+
+-- Assume a sub ensure condition when a function call returns.
+assumeSubEnsure :: Expr -> I.Ensure -> V ()
+assumeSubEnsure ret (I.Ensure a) = do
+  cond <- condition a
+  addLemma $ retval cond ret
+
+-- Verified assertions are turned into comments.
+checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
+checkAssert stmt check = do
+  proc <- procName
+  check <- expr check
+  vc <- newVC check
+  pass <- checkVC vc
+  if pass
+    then do
+      return $ I.Comment $ "Assertion verified: " ++ show stmt
+    else do
+      lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
+      return stmt
+
+-- Checks a verification condition then adds it to the list of lemmas.
+checkVC :: Expr -> V Bool
+checkVC a = do
+  m <- get
+  let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
+      thm' = optimize thm
+  lift $ putStrLn "VC:"
+  lift $ print thm
+  lift $ putStrLn "\nOptimized VC:"
+  lift $ print thm'
+  lift $ putStrLn ""
+  pass <- case thm' of
+    -- Don't call ACL2 if the result is obvious.
+    Bool a -> return a
+    --thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm']
+    thm -> lift $ A.check [A.thm $ acl2 thm]
+  addLemma a
+  return pass
 
 -- Replace the 'retval' expressions with a return expression.
 retval :: Expr -> Expr -> Expr
@@ -110,146 +312,6 @@ condition a = case a of
 -- Rewrite statement blocks.
 block :: I.Block -> V I.Block
 block = mapM stmt
-
--- Defines a new verification condition (VC).
-newVC :: Expr -> V Expr
-newVC check = do
-  m <- get
-  let vc = "vc" ++ show (nextVCId m)
-      vc' = implies (branch m) check
-  case vc' of
-    Bool a -> return $ Bool a
-    _ -> do 
-      set m { nextVCId = nextVCId m + 1, body = body m . let' vc vc' }
-      return $ Var vc
-
--- Adds a VC as a lemma.
-addLemma :: Expr -> V ()
-addLemma a = do
-  m <- get
-  set m { lemmas = lemmas m ++ [a] }
-
--- Checks a verification condition then adds it to the list of lemmas.
-checkVC :: Expr -> V Bool
-checkVC a = do
-  m <- get
-  let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
-      thm' = optimize thm
-  lift $ putStrLn "VC:"
-  lift $ print thm
-  lift $ putStrLn "\nOptimized VC:"
-  lift $ print thm'
-  lift $ putStrLn ""
-  pass <- case thm' of
-    -- Don't call ACL2 if the result is obvious.
-    Bool a -> return a
-    --thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm']
-    thm -> lift $ A.check [A.thm $ acl2 thm]
-  addLemma a
-  return pass
-
--- Name of current procedure undergoing analysis.
-procName :: V String
-procName = do
-  m <- get
-  return $ procName' m
-
--- Defines a branching condition (BC).
-newBC :: I.Expr -> V Expr
-newBC cond = do
-  cond <- expr cond
-  m <- get
-  let bc = "bc" ++ show (nextBCId m)
-  set m { nextBCId = nextBCId m + 1, body = body m . let' bc cond }
-  return $ Var bc
-
--- Create a new free variable.  Used to model unmodelable Ivory constructs.
-newFree :: V Expr
-newFree = do
-  m <- get
-  let free = "free" ++ show (nextFreeId m)
-  set m { nextFreeId = nextFreeId m + 1 }
-  addBody $ forAll [free]
-  return $ Var free
-
--- Create a new env variable.
-newEnv :: V String
-newEnv = do
-  m <- get
-  set m { nextEnvId = nextEnvId m + 1 }
-  return $ "env" ++ show (nextEnvId m)
-
-addBody :: (Expr -> Expr) -> V ()
-addBody b = do
-  m <- get
-  set m { body = body m . b }
-
-getEnv :: V Expr
-getEnv = do
-  m <- get
-  return $ env m
-
-setEnv :: Expr -> V ()
-setEnv a = do
-  m <- get
-  set m { env = a }
-
-extendEnv :: String -> Expr -> V ()
-extendEnv a b = do
-  env0 <- getEnv
-  env1 <- newEnv
-  addBody $ let' env1 $ RecordOverlay (Record [(a, b)]) env0
-  setEnv $ Var env1
-
-lookupEnv :: String -> V Expr
-lookupEnv a = do
-  env <- getEnv
-  return $ RecordProject env a
-
--- Create a new state variable and sets it as the current state.
-newState :: (Expr -> Expr) -> V ()
-newState f = do
-  m <- get
-  let state0 = state m
-      state1 = "state" ++ show (nextStateId m)
-  set m
-    { nextStateId = nextStateId m + 1
-    , state = Var state1
-    , body = body m . let' state1 (f state0)
-    }
-
-getState :: V Expr
-getState = do
-  m <- get
-  return $ state m
-
--- Extends the state, returns pointer (index) to added state.
-extendState :: Expr -> V Expr
-extendState a = do
-  state0 <- getState
-  newState $ \ state0 -> ArrayAppend state0 $ Array [a]
-  return $ length' state0
-
--- Updates a state value.
-updateState :: Expr -> Expr -> V ()
-updateState ref value = newState $ ArrayUpdate ref value
-
--- Dereference a reference.
-lookupState :: Expr -> V Expr
-lookupState ref = do
-  state <- getState
-  return $ ArrayProject state ref
-
--- Add a return expression.
-addReturn :: Expr -> V ()
-addReturn a = do
-  m <- get
-  set m { returns = returns m ++ [a] }
-
-getReturns :: V [Expr]
-getReturns = do
-  m <- get
-  return $ returns m
 
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
@@ -342,60 +404,6 @@ stmt a = case a of
   I.Forever _      -> return a
   I.Break          -> return a
   -}
-
-getProc :: String -> V I.Proc
-getProc f = do
-  m <- get
-  case [ p | p <- procs m, I.procSym p == f ] of
-    [p] -> return p
-    []  -> error $ "Procedure not found: " ++ f
-    _   -> error $ "Multple procedures found: " ++ f
-
--- Verified assertions are turned into comments.
-checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
-checkAssert stmt check = do
-  proc <- procName
-  check <- expr check
-  vc <- newVC check
-  pass <- checkVC vc
-  if pass
-    then do
-      return $ I.Comment $ "Assertion verified: " ++ show stmt
-    else do
-      lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
-      return stmt
-
--- Check ensures on all return points and remove if possible.
-checkEnsure :: I.Ensure -> V (Maybe I.Ensure)
-checkEnsure ensure@(I.Ensure a) = do
-  cond <- condition a
-  pass <- getReturns >>= mapM (checkEnsureReturn . retval cond) >>= return . and
-  if pass then return $ Just ensure else return Nothing
-  where
-  -- Check an single return point.
-  checkEnsureReturn :: Expr -> V Bool
-  checkEnsureReturn check = do
-    proc <- procName
-    vc <- newVC check
-    pass <- checkVC vc
-    if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
-    return pass
-
--- Check a sub require condition on a function call.
-checkSubRequire :: String -> I.Require -> V Bool
-checkSubRequire callee req@(I.Require a) = do
-  cond <- condition a
-  caller <- procName
-  vc <- newVC cond
-  pass <- checkVC vc
-  if pass then return () else lift $ putStrLn $ "Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req
-  return pass
-
--- Assume a sub ensure condition when a function call returns.
-assumeSubEnsure :: Expr -> I.Ensure -> V ()
-assumeSubEnsure ret (I.Ensure a) = do
-  cond <- condition a
-  addLemma $ retval cond ret
 
 -- Convert an Ivory expression.  Unsupported expressions are converted to free variables (ForAll a).
 expr :: I.Expr -> V Expr
