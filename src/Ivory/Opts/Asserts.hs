@@ -84,7 +84,7 @@ require (I.Require a) = do
 
 -- Check ensures and remove if possible.
 ensure :: I.Ensure -> V (Maybe I.Ensure)
-ensure ensure@(I.Ensure _) = return $ Just ensure  --XXX
+ensure ensure@(I.Ensure _) = return $ Just ensure  --XXX  Each return point must pass before ensure can be removed.
 
 -- Rewrite statement blocks.
 block :: I.Block -> V I.Block

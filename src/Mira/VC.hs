@@ -138,7 +138,42 @@ a >=. b = (a >. b) ||. (a ==. b)
 mod' = BinOp Mod
 
 optimize :: Expr -> Expr
-optimize = optRemoveNullEffect . optConstantProp
+optimize = optRemoveNullEffect . optConstantProp . optInline . optRemoveNullEffect . optConstantProp
+
+optInline :: Expr -> Expr
+optInline = optInline' []
+
+optInline' :: [(String, Expr)] -> Expr -> Expr
+optInline' env a = case a of
+  Var a -> case lookup a env of
+    Nothing -> Var a
+    Just a  -> a
+
+  -- Inline when a let var is bound to another var.
+  Let a (Var b) c -> opt' ((a, Var b) : env) c
+
+  -- Inline when introduced variable is referenced only once.
+  Let a b c -> Let a (opt b) (if inline then opt' ((a, opt b) : env) c else opt' env c)
+    where
+    inline = length (elemIndices a $ vars c) <= 1
+
+  ForAll a b -> ForAll a $ opt' [ (a', b) | (a', b) <- env, a' /= a ] b
+  If a b c -> If (opt a) (opt b) (opt c)
+  Unit -> Unit
+  Bool a -> Bool a
+  Integer a -> Integer a
+  Record a -> Record [ (a, opt b) | (a, b) <- a ]
+  RecordOverlay a b -> RecordOverlay (opt a) (opt b)
+  RecordProject a b -> RecordProject (opt a) b
+  Array a -> Array $ map opt a
+  ArrayUpdate a b c -> ArrayUpdate (opt a) (opt b) (opt c)
+  ArrayAppend a b -> ArrayAppend (opt a) (opt b)
+  ArrayProject a b -> ArrayProject (opt a) (opt b)
+  UniOp a b -> UniOp a (opt b)
+  BinOp a b c -> BinOp a (opt b) (opt c)
+  where
+  opt  = optInline' env
+  opt' = optInline'
 
 optRemoveNullEffect :: Expr -> Expr
 optRemoveNullEffect a = case a of
@@ -165,24 +200,25 @@ optRemoveNullEffect a = case a of
   where
   opt = optRemoveNullEffect
 
-  vars :: Expr -> [String]
-  vars a = case a of
-    Var    a     -> [a]
-    Let    a b c -> vars b ++ [ v | v <- vars c, v /= a ]
-    ForAll a b   -> [ v | v <- vars b, v /= a ]
-    If a b c -> vars a ++ vars b ++ vars c
-    UniOp _ a -> vars a
-    BinOp _ a b -> vars a ++ vars b
-    Unit      -> []
-    Bool    _ -> []
-    Integer _ -> []
-    Record        a     -> concatMap vars $ snd $ unzip a
-    RecordOverlay a b   -> vars a ++ vars b
-    RecordProject a _   -> vars a
-    Array         a     -> concatMap vars a
-    ArrayAppend   a b   -> vars a ++ vars b
-    ArrayProject  a b   -> vars a ++ vars b
-    ArrayUpdate   a b c -> vars a ++ vars b ++ vars c
+-- Variables referenced in an expression.
+vars :: Expr -> [String]
+vars a = case a of
+  Var    a     -> [a]
+  Let    a b c -> vars b ++ [ v | v <- vars c, v /= a ]
+  ForAll a b   -> [ v | v <- vars b, v /= a ]
+  If a b c -> vars a ++ vars b ++ vars c
+  UniOp _ a -> vars a
+  BinOp _ a b -> vars a ++ vars b
+  Unit      -> []
+  Bool    _ -> []
+  Integer _ -> []
+  Record        a     -> concatMap vars $ snd $ unzip a
+  RecordOverlay a b   -> vars a ++ vars b
+  RecordProject a _   -> vars a
+  Array         a     -> concatMap vars a
+  ArrayAppend   a b   -> vars a ++ vars b
+  ArrayProject  a b   -> vars a ++ vars b
+  ArrayUpdate   a b c -> vars a ++ vars b ++ vars c
 
 optConstantProp :: Expr -> Expr
 optConstantProp = optConstantProp' []
@@ -194,6 +230,7 @@ optConstantProp' env a = case a of
   Integer a -> Integer a
 
   UniOp Not a -> case opt a of
+    UniOp Not a -> a
     Bool a -> Bool $ not a
     a      -> UniOp Not a
 
@@ -203,6 +240,8 @@ optConstantProp' env a = case a of
     (_, Bool False)  -> false
     (Bool True, b)   -> b
     (a, Bool True)   -> a
+    (a, UniOp Not b) | a == b -> false
+    (UniOp Not a, b) | a == b -> false
     (a, b)
       | a == b       -> a
       | otherwise    -> BinOp And a b
@@ -213,6 +252,8 @@ optConstantProp' env a = case a of
     (_, Bool True)   -> true
     (Bool False, b)  -> b
     (a, Bool False)  -> a
+    (a, UniOp Not b) | a == b -> true
+    (UniOp Not a, b) | a == b -> true
     (a, b)
       | a == b       -> a
       | otherwise    -> BinOp Or a b
