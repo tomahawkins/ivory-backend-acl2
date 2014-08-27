@@ -70,30 +70,60 @@ assertsFold modules = mapM analyzeModule modules
 require :: I.Require -> V ()
 require (I.Require a) = do
   env <- getEnv
-  a <- cond a
+  a <- condition a
   setEnv env
   m <- get
   set m { lemmas = lemmas m ++ [a] }
-  where
-  cond :: I.Cond -> V Expr
-  cond a = case a of
-    I.CondBool a -> expr a
-    I.CondDeref _ ref v a -> do
-      expr ref >>= lookupState >>= extendEnv (var v)
-      cond a
 
--- Check ensures and remove if possible.
+-- Check ensures on all return points and remove if possible.
 ensure :: I.Ensure -> V (Maybe I.Ensure)
-ensure ensure@(I.Ensure _) = return $ Just ensure  --XXX  Each return point must pass before ensure can be removed.
+ensure ensure@(I.Ensure a) = do
+  cond <- condition a
+  pass <- getReturns >>= mapM (checkEnsure ensure . retval cond) >>= return . and
+  if pass then return $ Just ensure else return Nothing
+
+-- Replace the 'retval' expressions with a return expression.
+retval :: Expr -> Expr -> Expr
+retval a ret = case a of
+  Var "retval" -> ret
+  Var a        -> Var a
+  Let a b c
+    | a == "retval" -> Let a b c
+    | otherwise     -> Let a (retval' b) (retval' c)
+  ForAll a b
+    | a == "retval" -> ForAll a b
+    | otherwise     -> ForAll a $ retval' b
+  Record        a     -> Record [ (a, retval' b) | (a, b) <- a ]
+  RecordOverlay a b   -> RecordOverlay (retval' a) (retval' b)
+  RecordProject a b   -> RecordProject (retval' a) b
+  Array         a     -> Array $ map retval' a
+  ArrayAppend   a b   -> ArrayAppend (retval' a) (retval' b)
+  ArrayUpdate   a b c -> ArrayUpdate (retval' a) (retval' b) (retval' c)
+  ArrayProject  a b   -> ArrayProject (retval' a) (retval' b)
+  Unit -> Unit
+  Bool a -> Bool a
+  Integer a -> Integer a
+  UniOp a b -> UniOp a $ retval' b
+  BinOp a b c -> BinOp a (retval' b) (retval' c)
+  If a b c -> If (retval' a) (retval' b) (retval' c)
+  where
+  retval' = flip retval ret
+
+-- Converts a condition to an expression.
+condition :: I.Cond -> V Expr
+condition a = case a of
+  I.CondBool a -> expr a
+  I.CondDeref _ ref v a -> do
+    expr ref >>= lookupState >>= extendEnv (var v)
+    condition a
 
 -- Rewrite statement blocks.
 block :: I.Block -> V I.Block
 block = mapM stmt
 
 -- Defines a new verification condition (VC).
-newVC :: I.Expr -> V Expr
+newVC :: Expr -> V Expr
 newVC check = do
-  check <- expr check
   m <- get
   let vc = "vc" ++ show (nextVCId m)
       vc' = implies (branch m) check
@@ -225,6 +255,11 @@ addReturn a = do
   m <- get
   set m { returns = returns m ++ [a] }
 
+getReturns :: V [Expr]
+getReturns = do
+  m <- get
+  return $ returns m
+
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
 stmt a = case a of
@@ -302,6 +337,7 @@ stmt a = case a of
 checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
 checkAssert stmt check = do
   proc <- proc
+  check <- expr check
   vc <- newVC check
   pass <- checkVC vc
   if pass
@@ -310,6 +346,15 @@ checkAssert stmt check = do
     else do
       lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
       return stmt
+
+-- Check an ensure condition.
+checkEnsure :: I.Ensure -> Expr -> V Bool
+checkEnsure ensure check = do
+  proc <- proc
+  vc <- newVC check
+  pass <- checkVC vc
+  if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
+  return pass
 
 -- Convert an Ivory boolean expression to ACL2.
 --bool :: I.Expr -> V Expr
