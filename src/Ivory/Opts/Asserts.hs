@@ -5,6 +5,7 @@ module Ivory.Opts.Asserts
 
 import Data.Maybe
 import MonadLib
+import Text.Printf
 
 import qualified Ivory.Language.Syntax.AST  as I
 import qualified Ivory.Language.Syntax.Type as I
@@ -207,19 +208,19 @@ getProc f = do
 
 -- Convert requires to lemmas.
 assumeRequire :: I.Require -> V ()
-assumeRequire (I.Require a) = condition a >>= addLemma
+assumeRequire (I.Require a) = condition Nothing a >>= addLemma
 
 -- Check ensures on all return points and remove if possible.
 checkEnsure :: I.Ensure -> V (Maybe I.Ensure)
 checkEnsure ensure@(I.Ensure a) = do
-  cond <- condition a
-  pass <- getReturns >>= mapM (checkEnsureReturn . retval cond) >>= return . and
+  pass <- getReturns >>= mapM (flip condition a . Just) >>= mapM checkEnsureReturn >>= return . and
   if pass then return $ Just ensure else return Nothing
   where
   -- Check an single return point.
   checkEnsureReturn :: Expr -> V Bool
   checkEnsureReturn check = do
     proc <- procName
+    lift $ printf "Checking ensure at return point:  procedure = %s  ensure = %s\n" proc (show check)
     vc <- newVC check
     pass <- checkVC vc
     if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
@@ -228,8 +229,9 @@ checkEnsure ensure@(I.Ensure a) = do
 -- Check a sub require condition on a function call.
 checkSubRequire :: String -> I.Require -> V Bool
 checkSubRequire callee req@(I.Require a) = do
-  cond <- condition a
+  cond <- condition Nothing a
   caller <- procName
+  lift $ printf "Checking sub-require:  caller = %s  callee = %s  require = %s\n"  caller callee (show cond)
   vc <- newVC cond
   pass <- checkVC vc
   if pass then return () else lift $ putStrLn $ "Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req
@@ -238,7 +240,7 @@ checkSubRequire callee req@(I.Require a) = do
 -- Assume a sub ensure condition when a function call returns.
 assumeSubEnsure :: Expr -> I.Ensure -> V ()
 assumeSubEnsure ret (I.Ensure a) = do
-  cond <- condition a
+  cond <- condition (Just ret) a
   addLemma $ retval cond ret
 
 -- Verified assertions are turned into comments.
@@ -246,6 +248,7 @@ checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
 checkAssert stmt check = do
   proc <- procName
   check <- expr check
+  lift $ printf "Checking assert:  procedure = %s  assert = %s\n" proc (show check)
   vc <- newVC check
   pass <- checkVC vc
   if pass
@@ -302,12 +305,12 @@ retval a ret = case a of
   retval' = flip retval ret
 
 -- Converts a condition to an expression.
-condition :: I.Cond -> V Expr
-condition a = case a of
-  I.CondBool a -> expr a
+condition :: Maybe Expr -> I.Cond -> V Expr
+condition retval a = case a of
+  I.CondBool a -> expr' retval a
   I.CondDeref _ ref v a -> do
     expr ref >>= lookupState >>= extendEnv (var v)
-    condition a
+    condition retval a
 
 -- Rewrite statement blocks.
 block :: I.Block -> V I.Block
@@ -407,9 +410,15 @@ stmt a = case a of
 
 -- Convert an Ivory expression.  Unsupported expressions are converted to free variables (ForAll a).
 expr :: I.Expr -> V Expr
-expr a = case a of
+expr = expr' Nothing
+
+-- Convert an Ivory expression, replacing 'retval' varaibles with an optional expression.
+expr' :: Maybe Expr -> I.Expr -> V Expr
+expr' retval a = case a of
   I.ExpSym      a       -> lookupEnv a
-  I.ExpVar      a       -> lookupEnv $ var a
+  I.ExpVar      a       -> case retval of
+    Just b | var a == "retval" -> return b
+    _ -> lookupEnv $ var a
   I.ExpLit      a       -> case a of
     I.LitBool    a -> return $ Bool    a
     I.LitInteger a -> return $ Integer a
@@ -422,6 +431,9 @@ expr a = case a of
     args <- mapM expr args
     intrinsic op args
   _ -> newFree
+  where
+  expr = expr' retval
+
 
 -- Convert Ivory intrinsitcs.
 intrinsic :: I.ExpOp -> [Expr] -> V Expr

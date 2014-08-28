@@ -74,6 +74,34 @@ intrinsicTest = proc "intrinsicTest" $ \ cond1 num1 -> requires (num1 ==? 22) $ 
 implies :: IBool -> IBool -> IBool
 implies a b = iNot a .|| b
 
+wait :: Def ('[Sint32, Sint32] :-> Sint32)
+wait = proc "wait" $ \ n i ->
+  requires (n >=? 0) $
+  requires (i >?  0) $
+  ensures  (\ result -> result >?  0) $
+  ensures  (\ result -> result >? 10) $
+  body $ do
+    iters <- local (ival 0)
+    call_ waitLoop n i iters
+    itersValue <- deref iters
+    ret itersValue
+
+waitLoop :: Def ('[Sint32, Sint32, Ref s (Stored Sint32)] :-> ())
+waitLoop = proc "waitLoop" $ \ n i iters -> body $ do
+  ifte_ (n >? 0)
+    ( do
+      itersValue <- deref iters
+      store iters $ itersValue + 1
+      -- Call W not implemented.
+      assert $ n >? i
+      assert $ i >? 0
+      call_ waitLoop (n - i) i iters
+    )
+    ( do
+      retVoid
+    )
+  retVoid
+
 -- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)
 factorial  = proc "factorial" $ \ n -> body $
@@ -139,7 +167,8 @@ main :: IO ()
 main = do
   --mapM_ print $ compile (package "arrayTest" $ incl arrayTest)
 
-  verifyAssertions $ package "intrinsicTest" $ incl intrinsicTest
+  --verifyAssertions $ package "intrinsicTest" $ incl intrinsicTest
+  verifyAssertions $ package "waitTest" $ incl wait >> incl waitLoop
 
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
   testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
