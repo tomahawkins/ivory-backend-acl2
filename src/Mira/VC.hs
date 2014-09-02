@@ -42,6 +42,7 @@ data Expr
   | Unit
   | Bool          Bool
   | Integer       Integer
+  | Comment       String Expr
   deriving Eq
 
 data UniOp
@@ -83,6 +84,7 @@ instance Show Expr where
     Unit                -> "()"
     Bool          a     -> if a then "true" else "false"
     Integer       a     -> show a
+    Comment       a b   -> "-- " ++ a ++ "\n" ++ show b
 
 instance Show UniOp where
   show a = case a of
@@ -171,6 +173,7 @@ optInline' env a = case a of
   ArrayProject a b -> ArrayProject (opt a) (opt b)
   UniOp a b -> UniOp a (opt b)
   BinOp a b c -> BinOp a (opt b) (opt c)
+  Comment _ b -> opt b
   where
   opt  = optInline' env
   opt' = optInline'
@@ -197,6 +200,7 @@ optRemoveNullEffect a = case a of
   ArrayAppend   a b   -> ArrayAppend  (opt a) (opt b)
   ArrayUpdate   a b c -> ArrayUpdate  (opt a) (opt b) (opt c)
   ArrayProject  a b   -> ArrayProject (opt a) (opt b)
+  Comment       _ b   -> opt b
   where
   opt = optRemoveNullEffect
 
@@ -219,6 +223,7 @@ vars a = case a of
   ArrayAppend   a b   -> vars a ++ vars b
   ArrayProject  a b   -> vars a ++ vars b
   ArrayUpdate   a b c -> vars a ++ vars b ++ vars c
+  Comment       _ b   -> vars b
 
 optConstantProp :: Expr -> Expr
 optConstantProp = optConstantProp' []
@@ -354,11 +359,11 @@ optConstantProp' env a = case a of
     (a, b)             -> ArrayAppend a b
 
   ArrayProject a b   -> case (opt a, opt b) of
-    (Integer a', Array b)
-      | a < length b -> b !! a
+    (Array a, Integer b')
+      | b < length a -> a !! b
       | otherwise -> error "Index exceeds bounds of array."
       where
-      a = fromInteger a'
+      b = fromInteger b'
     (a, b) -> ArrayProject a b
 
   ArrayUpdate  a b c -> case (opt a, opt b, opt c) of
@@ -368,6 +373,8 @@ optConstantProp' env a = case a of
       where
       a = fromInteger a'
     (a, b, c) -> ArrayUpdate a b c
+
+  Comment _ b -> opt b
 
   where
   opt  = optConstantProp' env

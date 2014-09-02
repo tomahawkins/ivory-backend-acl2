@@ -86,21 +86,25 @@ wait = proc "wait" $ \ n i ->
     itersValue <- deref iters
     ret itersValue
 
+-- XXX Dummy return value is to get ensures working on with functions that should return ().
 waitLoop :: Def ('[Sint32, Sint32, Ref s (Stored Sint32)] :-> ())
-waitLoop = proc "waitLoop" $ \ n i iters -> body $ do
-  ifte_ (n >? 0)
-    ( do
-      itersValue <- deref iters
-      store iters $ itersValue + 1
-      -- Call W not implemented.
-      assert $ n >? i
-      assert $ i >? 0
-      call_ waitLoop (n - i) i iters
-    )
-    ( do
-      retVoid
-    )
-  retVoid
+waitLoop = proc "waitLoop" $ \ n i iters ->
+  requires (checkStored iters (>=? 0)) $
+  ensures  (const (checkStored iters (>=? 0))) $
+  body $ do
+    ifte_ (n >? 0)
+      ( do
+        itersValue <- deref iters
+        store iters $ itersValue + 1
+        -- Call W not implemented.
+        assert $ n >? i
+        assert $ i >? 0
+        call_ waitLoop (n - i) i iters
+        retVoid
+      )
+      ( do
+        retVoid
+      )
 
 -- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)

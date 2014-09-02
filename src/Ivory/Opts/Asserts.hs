@@ -3,6 +3,7 @@ module Ivory.Opts.Asserts
   ( assertsFold
   ) where
 
+import Data.List
 import Data.Maybe
 import MonadLib
 import Text.Printf
@@ -25,67 +26,54 @@ assertsFold modules = mapM analyzeModule modules
     where
     analyzeProc :: I.Proc -> IO I.Proc
     analyzeProc proc = do
-      (p, _) <- runStateT init $ do
-        mapM_ assumeRequire $ I.procRequires proc
-        body <- block $ I.procBody proc
-        ensures <- mapM checkEnsure (I.procEnsures proc) >>= return . catMaybes
+      (p, _) <- runStateT init $ comment' (printf "Procedure: %s(%s)" (I.procSym proc) $ intercalate ", " [ var $ I.tValue a | a <- I.procArgs proc ]) $ do
+        comment' "Procedure arguments and initial environment." $ do
+          argVars <- mapM (const newFree) args
+          newEnv $ Record [ (a, b) | (a, b) <- zip args argVars ]
+        comment' "Assuming requires." $ mapM_ assumeRequire $ I.procRequires proc
+        body <- comment' "Procedure body. " $ block $ I.procBody proc
+        ensures <- comment' "Checking ensures." $ mapM checkEnsure (I.procEnsures proc) >>= return . catMaybes
         return $ proc { I.procBody = body, I.procEnsures = ensures }
       return p
       where
       args = map (var . I.tValue) $ I.procArgs proc
       init = VDB
-        { nextVCId    = 0
-        , nextBCId    = 0
-        , nextFreeId  = 0
-        , nextEnvId   = 1
-        , nextStateId = 1
-        , procName'   = I.procSym proc
-        , procs       = concat [ I.public (I.modProcs m) ++ I.private (I.modProcs m) | m <- modules ]
-        , body        = forAll ("state0" : args) . let' "env0" (Record [ (a, Var a) | a <- args])
-        , branch      = true
-        , lemmas      = []
-        , env         = Var "env0"
-        , state       = Var "state0"
-        , returns     = []
+        { nextVCId     = 0
+        , nextBCId     = 0
+        , nextFreeId   = 0
+        , nextEnvId    = 0
+        , nextAssumeId = 0
+        , nextStackId  = 1
+        , procName'    = I.procSym proc
+        , procs        = concat [ I.public (I.modProcs m) ++ I.private (I.modProcs m) | m <- modules ]
+        , body         = forAll ["stack0"]
+        , branch       = true
+        , lemmas       = []
+        , env          = undefined
+        , stack        = Var "stack0"
+        , returns      = []
         }
 
 -- Data carried through verification monad.
 data VDB = VDB
-  { nextVCId    :: Int
-  , nextBCId    :: Int
-  , nextFreeId  :: Int
-  , nextEnvId   :: Int
-  , nextStateId :: Int
-  , procName'   :: String
-  , procs       :: [I.Proc]
-  , body        :: Expr -> Expr
-  , branch      :: Expr
-  , lemmas      :: [Expr]
-  , env         :: Expr
-  , state       :: Expr
-  , returns     :: [Expr]
+  { nextVCId     :: Int
+  , nextBCId     :: Int
+  , nextFreeId   :: Int
+  , nextEnvId    :: Int
+  , nextStackId  :: Int
+  , nextAssumeId :: Int
+  , procName'    :: String
+  , procs        :: [I.Proc]
+  , body         :: Expr -> Expr
+  , branch       :: Expr
+  , lemmas       :: [Expr]
+  , env          :: Expr
+  , stack        :: Expr
+  , returns      :: [Expr]
   }
 
 -- Verification monad.
 type V a = StateT VDB IO a
-
--- Defines a new verification condition (VC).
-newVC :: Expr -> V Expr
-newVC check = do
-  m <- get
-  let vc = "vc" ++ show (nextVCId m)
-      vc' = implies (branch m) check
-  case vc' of
-    Bool a -> return $ Bool a
-    _ -> do 
-      set m { nextVCId = nextVCId m + 1, body = body m . let' vc vc' }
-      return $ Var vc
-
--- Adds a VC as a lemma.
-addLemma :: Expr -> V ()
-addLemma a = do
-  m <- get
-  set m { lemmas = lemmas m ++ [a] }
 
 -- Name of current procedure undergoing analysis.
 procName :: V String
@@ -117,12 +105,26 @@ addBody b = do
   m <- get
   set m { body = body m . b }
 
+-- Insert a comment.
+comment :: String -> V ()
+comment a = addBody $ Comment a
+
+-- Insert a nested comment.
+comment' :: String -> V a -> V a
+comment' a b = do
+  comment $ "( " ++ a
+  b <- b
+  comment ")"
+  return b
+
 -- Create a new environment variable.
-newEnv :: V String
-newEnv = do
+newEnv :: Expr -> V ()
+newEnv a = do
   m <- get
   set m { nextEnvId = nextEnvId m + 1 }
-  return $ "env" ++ show (nextEnvId m)
+  let env = "env" ++ show (nextEnvId m)
+  addBody $ let' env a
+  setEnv $ Var env
 
 -- Get the current environment.
 getEnv :: V Expr
@@ -136,13 +138,19 @@ setEnv a = do
   m <- get
   set m { env = a }
 
+-- Restores the current environment on completion.
+withEnv :: V a -> V a
+withEnv a = do
+  env0 <- getEnv
+  a <- a
+  setEnv env0
+  return a
+
 -- Extend the current environment with a name and a value.
 extendEnv :: String -> Expr -> V ()
 extendEnv a b = do
   env0 <- getEnv
-  env1 <- newEnv
-  addBody $ let' env1 $ RecordOverlay (Record [(a, b)]) env0
-  setEnv $ Var env1
+  newEnv $ RecordOverlay (Record [(a, b)]) env0
 
 -- Lookup a name in the current environment.
 lookupEnv :: String -> V Expr
@@ -150,40 +158,54 @@ lookupEnv a = do
   env <- getEnv
   return $ RecordProject env a
 
--- Create a new state variable and sets it as the current state.
-newState :: (Expr -> Expr) -> V ()
-newState f = do
+-- Create a new stack variable and sets it as the current stack.
+newStack :: (Expr -> Expr) -> V ()
+newStack f = do
   m <- get
-  let state0 = state m
-      state1 = "state" ++ show (nextStateId m)
+  let stack0 = stack m
+      stack1 = "stack" ++ show (nextStackId m)
   set m
-    { nextStateId = nextStateId m + 1
-    , state = Var state1
-    , body = body m . let' state1 (f state0)
+    { nextStackId = nextStackId m + 1
+    , stack = Var stack1
+    , body = body m . let' stack1 (f stack0)
     }
 
--- Get the current state.
-getState :: V Expr
-getState = do
+-- Get the current stack.
+getStack :: V Expr
+getStack = do
   m <- get
-  return $ state m
+  return $ stack m
 
--- Extends the state, returns pointer (index) to added state.
-extendState :: Expr -> V Expr
-extendState a = do
-  state0 <- getState
-  newState $ \ state0 -> ArrayAppend state0 $ Array [a]
-  return $ length' state0
+-- Extends the stack, returns pointer (index) to added stack.
+extendStack :: Expr -> V Expr
+extendStack a = do
+  stack0 <- getStack
+  newStack $ \ stack0 -> ArrayAppend stack0 $ Array [a]
+  return $ length' stack0
 
--- Updates a state value.
-updateState :: Expr -> Expr -> V ()
-updateState ref value = newState $ ArrayUpdate ref value
+-- Updates a stack value.
+updateStack :: Expr -> Expr -> V ()
+updateStack ref value = newStack $ ArrayUpdate ref value
 
--- Dereference a reference.
-lookupState :: Expr -> V Expr
-lookupState ref = do
-  state <- getState
-  return $ ArrayProject state ref
+-- Dereference a reference on the stack.
+lookupStack :: Expr -> V Expr
+lookupStack ref = do
+  stack <- getStack
+  return $ ArrayProject stack ref
+
+-- Create a new stack of free variables, but keeps the stack size the same.
+freeStack :: V ()
+freeStack = comment' "Free the stack, but keep the number of elements the same." $ do
+  m <- get
+  let stack0 = stack m
+      stack1 = "stack" ++ show (nextStackId m)
+  set m
+    { nextStackId = nextStackId m + 1
+    , stack = Var stack1
+    , body = body m . forAll [stack1]
+    }
+  addLemma $ length' stack0 ==. length' (Var stack1)
+  
 
 -- Add a return expression.
 addReturn :: Expr -> V ()
@@ -221,27 +243,23 @@ checkEnsure ensure@(I.Ensure a) = do
   checkEnsureReturn check = do
     proc <- procName
     lift $ printf "Checking ensure at return point:  procedure = %s  ensure = %s\n" proc (show check)
-    vc <- newVC check
-    pass <- checkVC vc
+    pass <- checkVC check
     if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
     return pass
 
 -- Check a sub require condition on a function call.
 checkSubRequire :: String -> I.Require -> V Bool
 checkSubRequire callee req@(I.Require a) = do
-  cond <- condition Nothing a
+  check <- condition Nothing a
   caller <- procName
-  lift $ printf "Checking sub-require:  caller = %s  callee = %s  require = %s\n"  caller callee (show cond)
-  vc <- newVC cond
-  pass <- checkVC vc
+  lift $ printf "Checking sub-require:  caller = %s  callee = %s  require = %s\n"  caller callee (show check)
+  pass <- checkVC check
   if pass then return () else lift $ putStrLn $ "Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req
   return pass
 
 -- Assume a sub ensure condition when a function call returns.
 assumeSubEnsure :: Expr -> I.Ensure -> V ()
-assumeSubEnsure ret (I.Ensure a) = do
-  cond <- condition (Just ret) a
-  addLemma $ retval cond ret
+assumeSubEnsure ret (I.Ensure a) = condition (Just ret) a >>= addLemma
 
 -- Verified assertions are turned into comments.
 checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
@@ -249,8 +267,7 @@ checkAssert stmt check = do
   proc <- procName
   check <- expr check
   lift $ printf "Checking assert:  procedure = %s  assert = %s\n" proc (show check)
-  vc <- newVC check
-  pass <- checkVC vc
+  pass <- checkVC check
   if pass
     then do
       return $ I.Comment $ "Assertion verified: " ++ show stmt
@@ -261,6 +278,7 @@ checkAssert stmt check = do
 -- Checks a verification condition then adds it to the list of lemmas.
 checkVC :: Expr -> V Bool
 checkVC a = do
+  a <- newVC a
   m <- get
   let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
       thm' = optimize thm
@@ -274,42 +292,37 @@ checkVC a = do
     Bool a -> return a
     --thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm']
     thm -> lift $ A.check [A.thm $ acl2 thm]
-  addLemma a
+  m <- get
+  set m { lemmas = lemmas m ++ [a] }
   return pass
 
--- Replace the 'retval' expressions with a return expression.
-retval :: Expr -> Expr -> Expr
-retval a ret = case a of
-  Var "retval" -> ret
-  Var a        -> Var a
-  Let a b c
-    | a == "retval" -> Let a b c
-    | otherwise     -> Let a (retval' b) (retval' c)
-  ForAll a b
-    | a == "retval" -> ForAll a b
-    | otherwise     -> ForAll a $ retval' b
-  Record        a     -> Record [ (a, retval' b) | (a, b) <- a ]
-  RecordOverlay a b   -> RecordOverlay (retval' a) (retval' b)
-  RecordProject a b   -> RecordProject (retval' a) b
-  Array         a     -> Array $ map retval' a
-  ArrayAppend   a b   -> ArrayAppend (retval' a) (retval' b)
-  ArrayUpdate   a b c -> ArrayUpdate (retval' a) (retval' b) (retval' c)
-  ArrayProject  a b   -> ArrayProject (retval' a) (retval' b)
-  Unit -> Unit
-  Bool a -> Bool a
-  Integer a -> Integer a
-  UniOp a b -> UniOp a $ retval' b
-  BinOp a b c -> BinOp a (retval' b) (retval' c)
-  If a b c -> If (retval' a) (retval' b) (retval' c)
-  where
-  retval' = flip retval ret
+-- Defines a new verification condition (VC).
+newVC :: Expr -> V Expr
+newVC check = do
+  m <- get
+  let vc = "vc" ++ show (nextVCId m)
+      vc' = implies (branch m) check
+  set m { nextVCId = nextVCId m + 1 }
+  addBody $ let' vc vc'
+  return $ Var vc
+
+-- Adds a VC as a lemma.
+addLemma :: Expr -> V ()
+addLemma a = do
+  m <- get
+  let assume = "assume" ++ show (nextAssumeId m)
+      assume' = implies (branch m ) a
+  set m { nextAssumeId = nextAssumeId m + 1 }
+  addBody $ let' assume assume'
+  m <- get
+  set m { lemmas = lemmas m ++ [Var assume] }
 
 -- Converts a condition to an expression.
 condition :: Maybe Expr -> I.Cond -> V Expr
 condition retval a = case a of
   I.CondBool a -> expr' retval a
   I.CondDeref _ ref v a -> do
-    expr ref >>= lookupState >>= extendEnv (var v)
+    expr ref >>= lookupStack >>= extendEnv (var v)
     condition retval a
 
 -- Rewrite statement blocks.
@@ -319,51 +332,53 @@ block = mapM stmt
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
 stmt a = case a of
-  I.Comment        _ -> return a
+  I.Comment        c -> comment ("Ivory comment: " ++ c) >> return a
   I.Assert         b -> checkAssert a b
   I.CompilerAssert b -> checkAssert a b
   I.Assume         b -> checkAssert a b
 
   I.IfTE a b c -> do
-    cond <- newBC a
-    m0 <- get
-    set m0 { branch = branch m0 &&. cond }
-    b <- block b
-    m1 <- get
-    set m1 { branch = branch m0 &&. not' cond, lemmas = lemmas m0, env = env m0, state = state m0 }
-    c <- block c
-    m2 <- get
-    let l = length $ lemmas m0
-        lemmas1 = drop l $ lemmas m1
-        lemmas2 = drop l $ lemmas m2
-    set m2
-      { branch = branch m0
-      , lemmas = lemmas m0 ++ lemmas1 ++ lemmas2
-      , env    = env m0
-      }
-    newState $ const $ if' cond (state m1) (state m2)
-    return $ I.IfTE a b c
+    comment' "If statement." $ do
+      cond <- newBC a
+      m0 <- get
+      set m0 { branch = branch m0 &&. cond }
+      b <- comment' "If condition == true." $ block b
+      m1 <- get
+      set m1 { branch = branch m0 &&. not' cond, lemmas = lemmas m0, env = env m0, stack = stack m0 }
+      c <- comment' "If condition == false." $ block c
+      m2 <- get
+      let l = length $ lemmas m0
+          lemmas1 = drop l $ lemmas m1
+          lemmas2 = drop l $ lemmas m2
+      set m2
+        { branch = branch m0
+        , lemmas = lemmas m0 ++ lemmas1 ++ lemmas2
+        , env    = env m0
+        }
+      newStack $ const $ if' cond (stack m1) (stack m2)
+      return $ I.IfTE a b c
 
-  I.Deref    _ v r -> expr r >>= lookupState >>= extendEnv (var v) >> return a
+  -- How do we tell the difference between derefence from the stack or a global memory area?
+  I.Deref    _ v r -> comment' "Dereference a reference." $ expr r >>= lookupStack >>= extendEnv (var v) >> return a
 
-  I.AllocRef _ r v -> lookupEnv (var v) >>= extendState >>= extendEnv (var r) >> return a
+  I.AllocRef _ r v -> comment' "Allocate a reference." $ lookupEnv (var v) >>= extendStack >>= extendEnv (var r) >> return a
 
-  I.Store    _ r v -> do
+  I.Store    _ r v -> comment' "Store a value to a reference." $ do
     r <- expr r
     v <- expr v
-    updateState r v
+    updateStack r v
     return a
 
-  I.RefCopy _ r1 r2  -> do
+  I.RefCopy _ r1 r2  -> comment' "Copy a reference." $ do
     r1 <- expr r1
     r2 <- expr r2
-    lookupState r2 >>= updateState r1
+    lookupStack r2 >>= updateStack r1
     return a
 
-  I.Return b       -> expr (I.tValue b) >>= addReturn >> return a
-  I.ReturnVoid     -> addReturn unit >> return a
+  I.Return b       -> comment' "Return a value." $ expr (I.tValue b) >>= addReturn >> return a
+  I.ReturnVoid     -> comment' "Return void."    $ addReturn unit >> return a
 
-  I.Local t v i    -> do
+  I.Local t v i    -> comment' "Local variable introduction." $ do
     init i >>= extendEnv (var v)
     return a
     where
@@ -380,25 +395,21 @@ stmt a = case a of
   I.Assign _ v b   -> expr b >>= extendEnv (var v) >> return a
 
   I.Call  _ ret f args  -> do
-    -- Check sub-requires.
-    env0 <- getEnv
-    args <- mapM (expr . I.tValue) args
-    p <- getProc (var f)
-    env1 <- newEnv
-    addBody $ let' env1 $ Record [ (var $ I.tValue a, b) | (a, b) <- zip (I.procArgs p) args ] 
-    setEnv $ Var env1
-    mapM_ (checkSubRequire $ var f) $ I.procRequires p  -- XXX Need to collect results for all call sites to be able to remove requires.
-    setEnv env0
-
-    -- Assume sub-ensures.
-    case ret of
-      Nothing -> mapM_ (assumeSubEnsure unit) $ I.procEnsures p
-      Just ret -> do
-        free <- newFree
-        extendEnv (var ret) free
-        mapM_ (assumeSubEnsure $ Var $ var ret) $ I.procEnsures p
-    
-    return a
+    p <- getProc $ var f
+    comment' (printf "Calling procedure:  %s(%s)" (var f) $ intercalate ", " [ var $ I.tValue a | a <- I.procArgs p ]) $ do
+      returnValue <- withEnv $ do
+        comment' "Binding input arguments to new environment." $ do
+          args <- mapM (expr . I.tValue) args
+          newEnv $ Record [ (var $ I.tValue a, b) | (a, b) <- zip (I.procArgs p) args ] 
+        comment' "Checking sub-requires." $ mapM_ (checkSubRequire $ var f) $ I.procRequires p  -- XXX Need to collect results for all call sites to be able to remove requires.
+        freeStack
+        returnValue <- comment' "Return value." newFree
+        comment' "Assuming sub-ensures." $ mapM_ (assumeSubEnsure returnValue) $ I.procEnsures p
+        return returnValue
+      case ret of
+        Nothing -> return ()
+        Just ret -> comment' "Extend environment with return value." $ extendEnv (var ret) returnValue
+      return a
 
   -- XXX
   _ -> error $ "Unsupported stmt: " ++ show a
@@ -423,8 +434,8 @@ expr' retval a = case a of
     I.LitBool    a -> return $ Bool    a
     I.LitInteger a -> return $ Integer a
     _ -> newFree
-  I.ExpIndex    _ a _ b -> do { a <- expr a >>= lookupState; b <- expr b; return $ ArrayProject a b }
-  I.ExpLabel    _ a b   -> do { a <- expr a >>= lookupState; return $ RecordProject a b }
+  I.ExpIndex    _ a _ b -> do { a <- expr a >>= lookupStack; b <- expr b; return $ ArrayProject a b }
+  I.ExpLabel    _ a b   -> do { a <- expr a >>= lookupStack; return $ RecordProject a b }
   I.ExpToIx     a _     -> expr a   -- Is it ok to ignore the maximum bound?
   I.ExpSafeCast _ a     -> expr a
   I.ExpOp       op args -> do
