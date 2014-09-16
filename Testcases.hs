@@ -86,11 +86,10 @@ wait = proc "wait" $ \ n i ->
     itersValue <- deref iters
     ret itersValue
 
--- XXX Dummy return value is to get ensures working on with functions that should return ().
 waitLoop :: Def ('[Sint32, Sint32, Ref s (Stored Sint32)] :-> ())
 waitLoop = proc "waitLoop" $ \ n i iters ->
   requires (checkStored iters (>=? 0)) $
-  ensures  (const (checkStored iters (>=? 0))) $
+  ensures  (const (checkStored iters (>=? 0))) $    -- XXX How are these passing?  Is this a problem with recursion?
   body $ do
     ifte_ (n >? 0)
       ( do
@@ -102,9 +101,7 @@ waitLoop = proc "waitLoop" $ \ n i iters ->
         call_ waitLoop (n - i) i iters
         retVoid
       )
-      ( do
-        retVoid
-      )
+      retVoid
 
 -- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)
@@ -175,10 +172,10 @@ main = do
   verifyAssertions $ package "waitTest" $ incl wait >> incl waitLoop
 
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
-  testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
-  testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
-  testThm "loopTest  8 ==  8" loopTest   $ A.equal  8 $ A.cdr $ A.call "loopTest"   [A.nil, 8]
-  testThm "structTest  == 22" structTest $ A.equal 22 $ A.cdr $ A.call "structTest" [A.nil]
+  --testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
+  --testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
+  --testThm "loopTest  8 ==  8" loopTest   $ A.equal  8 $ A.cdr $ A.call "loopTest"   [A.nil, 8]
+  --testThm "structTest  == 22" structTest $ A.equal 22 $ A.cdr $ A.call "structTest" [A.nil]
   where
   testThm name func thm = test name $ A.check $ compile (package name $ incl func) ++ [A.thm thm]
 

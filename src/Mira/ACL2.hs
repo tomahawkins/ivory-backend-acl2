@@ -90,7 +90,11 @@ check'' debug a = do
   exe <- savedACL2
   (_, result, _) <- readProcessWithExitCode exe [] code
   let pass = not $ any (isPrefixOf "ACL2 Error") $ lines result
-  if debug then putStrLn result else return ()
+  if debug
+    then do
+      putStrLn code
+      putStrLn result
+    else return ()
   return pass
   where
   code = unlines $ map show a

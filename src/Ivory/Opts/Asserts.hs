@@ -244,7 +244,7 @@ checkEnsure ensure@(I.Ensure a) = do
     proc <- procName
     lift $ printf "Checking ensure at return point:  procedure = %s  ensure = %s\n" proc (show check)
     pass <- checkVC check
-    if pass then return () else lift $ putStrLn $ "Ensure failed in " ++ proc ++ ": " ++ show ensure
+    if pass then return () else lift $ putStrLn $ "FAIL: Ensure failed in " ++ proc ++ ": " ++ show ensure ++ "\n"
     return pass
 
 -- Check a sub require condition on a function call.
@@ -254,7 +254,7 @@ checkSubRequire callee req@(I.Require a) = do
   caller <- procName
   lift $ printf "Checking sub-require:  caller = %s  callee = %s  require = %s\n"  caller callee (show check)
   pass <- checkVC check
-  if pass then return () else lift $ putStrLn $ "Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req
+  if pass then return () else lift $ putStrLn $ "FAIL: Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req ++ "\n"
   return pass
 
 -- Assume a sub ensure condition when a function call returns.
@@ -272,7 +272,7 @@ checkAssert stmt check = do
     then do
       return $ I.Comment $ "Assertion verified: " ++ show stmt
     else do
-      lift $ putStrLn $ "Assertion failed in " ++ proc ++ ": " ++ show stmt
+      lift $ putStrLn $ "FAIL: Assertion failed in " ++ proc ++ ": " ++ show stmt ++ "\n"
       return stmt
 
 -- Checks a verification condition then adds it to the list of lemmas.
@@ -471,5 +471,41 @@ intrinsic op args = case op of
   arg = (args !!)
 
 acl2 :: Expr -> A.Expr
-acl2 = const A.t  -- XXX
+acl2 a = case a of
+  Var a -> A.var a
+  ForAll _ a -> expr a  -- XXX Assumes variable does not shadow other variables.
+  Let a b c -> A.let' [(a, expr b)] $ expr c
+  If a b c -> A.if' (expr a) (expr b) (expr c)
+  Unit -> A.nil
+  Bool a -> if a then A.t else A.nil
+  Integer a -> A.lit $ show a
+  Comment _ a -> expr a
+  Array a -> A.list $ map expr a
+  ArrayAppend a b -> A.append (expr a) (expr b)
+  ArrayProject a b -> A.nth (expr b) (expr a)
+  ArrayUpdate a b c -> A.updateNth (expr a) (expr b) (expr c)
+  Record a -> A.list [ A.cons (A.string a) (expr b) | (a, b) <- a ]
+  RecordOverlay a b  -> A.append (expr a) (expr b)
+  RecordProject a b -> A.cdr $ A.assoc (A.string b) (expr a)
+  UniOp op a -> case op of
+    Not    -> A.not' $ expr a
+    Length -> A.len  $ expr a
+    Negate -> 0 - (expr a)
+    Abs    -> A.if' (expr a A.>=. 0) (expr a) (0 - (expr a))
+    Signum -> A.if' (expr a A.>. 0) 1 $ A.if' (expr a A.<. 0) (-1) 0
+  BinOp op a b -> op' (expr a) (expr b)
+    where
+    op' = case op of
+      And     -> A.and'
+      Or      -> A.or'
+      Implies -> A.implies
+      Eq      -> A.equal
+      Lt      -> (A.<.)
+      Gt      -> (A.>.)
+      Add     -> (+)
+      Sub     -> (-)
+      Mul     -> (*)
+      Mod     -> A.mod'
+  where
+  expr = acl2
 
