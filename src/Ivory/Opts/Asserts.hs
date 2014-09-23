@@ -6,6 +6,7 @@ module Ivory.Opts.Asserts
 import Data.List
 import Data.Maybe
 import MonadLib
+import System.IO
 import Text.Printf
 
 import qualified Ivory.Language.Syntax.AST  as I
@@ -46,7 +47,8 @@ assertsFold modules = mapM analyzeModule modules
         , nextStackId  = 1
         , procName'    = I.procSym proc
         , procs        = concat [ I.public (I.modProcs m) ++ I.private (I.modProcs m) | m <- modules ]
-        , body         = forAll ["stack0"]
+        -- , body         = forAll ["stack0"]  -- XXX With a free initial stack, ACL2 would sometimes loop forever.
+        , body         = let' "stack0" $ Array []
         , branch       = true
         , lemmas       = []
         , env          = undefined
@@ -281,17 +283,19 @@ checkVC a = do
   a <- newVC a
   m <- get
   let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
-      thm' = optimize thm
-  lift $ putStrLn "VC:"
-  lift $ print thm
-  lift $ putStrLn "\nOptimized VC:"
-  lift $ print thm'
-  lift $ putStrLn ""
-  pass <- case thm' of
-    -- Don't call ACL2 if the result is obvious.
-    Bool a -> return a
-    --thm -> lift $ A.check [A.call "set-ignore-ok" [A.t], A.thm $ acl2 thm']
+      optimizedThm = optimize thm
+  pass <- case optimizedThm of
+    Bool a -> return a -- Don't call ACL2 if the result is obvious.
     thm -> lift $ A.check [A.thm $ acl2 thm]
+  if pass
+    then return ()
+    else do
+      lift $ putStrLn "VC:"
+      lift $ print thm
+      lift $ putStrLn "\nOptimized VC:"
+      lift $ print optimizedThm
+      lift $ putStrLn ""
+      lift $ hFlush stdout
   m <- get
   set m { lemmas = lemmas m ++ [a] }
   return pass
@@ -388,8 +392,8 @@ stmt a = case a of
       (I.TyInt _,  I.InitZero) -> return $ Integer 0
       (I.TyWord _, I.InitZero) -> return $ Integer 0
       (_, I.InitExpr _ a) -> expr a
-      (_, I.InitStruct a) -> do { b <- mapM init $ snd $ unzip a; return $ Record $ zip (fst $ unzip a) b }
-      (_, I.InitArray  a) -> do { a <- mapM init a; return $ Array a }
+      (_, I.InitStruct a) -> do { b <- mapM (init >=> extendStack) $ snd $ unzip a; return $ Record $ zip (fst $ unzip a) b }
+      (_, I.InitArray  a) -> do { a <- mapM (init >=> extendStack) a; return $ Array a }
       _ -> newFree
 
   I.Assign _ v b   -> expr b >>= extendEnv (var v) >> return a
@@ -411,10 +415,11 @@ stmt a = case a of
         Just ret -> comment' "Extend environment with return value." $ extendEnv (var ret) returnValue
       return a
 
+  I.Loop _ _ _ _ -> freeStack >> return a
+
   -- XXX
   _ -> error $ "Unsupported stmt: " ++ show a
   {-
-  I.Loop _ _ _ _   -> return a
   I.Forever _      -> return a
   I.Break          -> return a
   -}

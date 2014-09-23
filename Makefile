@@ -1,4 +1,5 @@
 .PHONY: all
+.PRECIOUS: test.log
 all: test.log
 
 test.log: Testcases.hs src/Ivory/Opts/*.hs src/Ivory/Compile/*.hs src/Mira/*.hs

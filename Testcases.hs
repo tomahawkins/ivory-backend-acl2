@@ -134,15 +134,19 @@ struct Foo { i :: Stored Uint32 }
 |]
 
 structTest :: Def ('[] :-> Uint32)
-structTest = proc "structTest" $ body $ do
+structTest = proc "structTest" $ ensures (==? 22) $ body $ do
   struct <- local $ istruct [ i .= ival 22 ]
   a <- deref $ struct ~> i
   ret a
 
+
 arrayTest :: Def ('[] :-> Uint32)
-arrayTest = proc "arrayTest" $ {- ensures (.= 6) $ -} body $ do
+arrayTest = proc "arrayTest" $ ensures (==? 6) $ body $ do
   -- Allocate a 4 element array with zeros: [0, 0, 0, 0]
   (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 1
+
+  --a <- deref $ array ! 0
+  --assert $ a ==? 1
 
   -- Iterate over the array making it: [0, 1, 2, 3]
   arrayMap $ \ i -> store (array ! i) $ safeCast i  --XXX Having both this loop and the loop below gives ACL2 troubles.
@@ -156,10 +160,10 @@ arrayTest = proc "arrayTest" $ {- ensures (.= 6) $ -} body $ do
     m <- deref $ array ! i
     store sum $ n + m
 
-  assert true
-
   -- Return the computed sum.
   deref sum >>= ret
+
+
 
 verifyAssertions :: Module -> IO ()
 verifyAssertions m = assertsFold [m] >> return ()
@@ -167,9 +171,12 @@ verifyAssertions m = assertsFold [m] >> return ()
 main :: IO ()
 main = do
   --mapM_ print $ compile (package "arrayTest" $ incl arrayTest)
-
-  --verifyAssertions $ package "intrinsicTest" $ incl intrinsicTest
-  verifyAssertions $ package "waitTest" $ incl wait >> incl waitLoop
+  verifyAssertions $ package "assertOptTest" $ do
+    incl intrinsicTest
+    incl wait
+    incl waitLoop
+    incl structTest
+    incl arrayTest
 
   --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
   --testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
