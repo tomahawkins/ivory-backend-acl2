@@ -1,4 +1,4 @@
-module Mira.Expr
+module Ivory.Compile.ACL2.Expr
   ( Var
   , Literal   (..)
   , Expr      (..)
@@ -14,8 +14,8 @@ import Data.Maybe (fromJust)
 import Data.List
 import Text.Printf
 
-import Mira.ACL2 hiding (Expr)
-import qualified Mira.ACL2 as A
+import           Language.ACL2 hiding (Expr)
+import qualified Language.ACL2 as A
 
 type Var = String
 

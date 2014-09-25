@@ -5,14 +5,15 @@ module Ivory.Compile.ACL2
   , lit
   ) where
 
-import qualified Mira      as M
-import qualified Mira.CLL  as M
-import qualified Mira.Expr as M
-import qualified Mira.ACL2 as A
+import qualified Language.ACL2 as A
 
 import qualified Ivory.Language.Syntax.AST   as I
 import qualified Ivory.Language.Syntax.Type  as I
 import qualified Ivory.Language.Syntax.Names as I
+
+import qualified Ivory.Compile.ACL2.Compile  as M
+import qualified Ivory.Compile.ACL2.CLL      as M
+import qualified Ivory.Compile.ACL2.Expr     as M
 
 -- | Compiles an Ivory module to ACL2.
 compile :: I.Module -> [A.Expr]
@@ -53,6 +54,7 @@ cllProc p = M.Proc (I.procSym p) (map (var . I.tValue) $ I.procArgs p) Nothing r
 
 cllStmt :: I.Stmt -> M.Stmt
 cllStmt a = case a of
+  I.Comment        _     -> M.Null
   I.IfTE           a b c -> M.If (cllExpr a) (cllStmts b) (cllStmts c)
   I.Return         a     -> M.Return $ Just $ cllExpr $ I.tValue a
   I.ReturnVoid           -> M.Return Nothing
@@ -72,7 +74,7 @@ cllStmt a = case a of
       I.IncrTo a -> (True, a)
       I.DecrTo a -> (False, a)
 
-  I.Comment _     -> M.Null
+  --I.Comment _     -> M.Null
   I.RefCopy _ _ _ -> error $ "Unsupported Ivory statement: " ++ show a
   I.Forever _     -> error $ "Unsupported Ivory statement: " ++ show a
   I.Break         -> error $ "Unsupported Ivory statement: " ++ show a

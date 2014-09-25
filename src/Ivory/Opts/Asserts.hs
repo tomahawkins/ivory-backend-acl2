@@ -6,14 +6,14 @@ module Ivory.Opts.Asserts
 import Data.List
 import Data.Maybe
 import MonadLib
-import System.IO
 import Text.Printf
+
+import qualified Language.ACL2 as A
 
 import qualified Ivory.Language.Syntax.AST  as I
 import qualified Ivory.Language.Syntax.Type as I
 import Ivory.Compile.ACL2 (var)
-import qualified Mira.ACL2 as A
-import Mira.VC
+import Ivory.Opts.Asserts.VC
 
 -- | Analyze an entire Ivory program, removing as many assertions as possible.
 assertsFold :: [I.Module] -> IO [I.Module]
@@ -28,6 +28,7 @@ assertsFold modules = mapM analyzeModule modules
     analyzeProc :: I.Proc -> IO I.Proc
     analyzeProc proc = do
       (p, _) <- runStateT init $ comment' (printf "Procedure: %s(%s)" (I.procSym proc) $ intercalate ", " [ var $ I.tValue a | a <- I.procArgs proc ]) $ do
+        newStack $ const $ Array []  -- Start with an empty stack.  Starting with a free stack sometimes cause problems for proofs.
         comment' "Procedure arguments and initial environment." $ do
           argVars <- mapM (const newFree) args
           newEnv $ Record [ (a, b) | (a, b) <- zip args argVars ]
@@ -44,15 +45,14 @@ assertsFold modules = mapM analyzeModule modules
         , nextFreeId   = 0
         , nextEnvId    = 0
         , nextAssumeId = 0
-        , nextStackId  = 1
+        , nextStackId  = 0
         , procName'    = I.procSym proc
         , procs        = concat [ I.public (I.modProcs m) ++ I.private (I.modProcs m) | m <- modules ]
-        -- , body         = forAll ["stack0"]  -- XXX With a free initial stack, ACL2 would sometimes loop forever.
-        , body         = let' "stack0" $ Array []
+        , body         = id
         , branch       = true
         , lemmas       = []
         , env          = undefined
-        , stack        = Var "stack0"
+        , stack        = undefined
         , returns      = []
         }
 
@@ -294,8 +294,8 @@ checkVC a = do
       lift $ print thm
       lift $ putStrLn "\nOptimized VC:"
       lift $ print optimizedThm
-      lift $ putStrLn ""
-      lift $ hFlush stdout
+      lift $ putStrLn "\nOptimized VC in ACL2:"
+      lift $ print $ A.thm $ acl2 optimizedThm
   m <- get
   set m { lemmas = lemmas m ++ [a] }
   return pass
@@ -416,13 +416,8 @@ stmt a = case a of
       return a
 
   I.Loop _ _ _ _ -> freeStack >> return a
-
-  -- XXX
-  _ -> error $ "Unsupported stmt: " ++ show a
-  {-
-  I.Forever _      -> return a
-  I.Break          -> return a
-  -}
+  I.Forever _    -> freeStack >> return a
+  I.Break -> error "Break found outside of loop."
 
 -- Convert an Ivory expression.  Unsupported expressions are converted to free variables (ForAll a).
 expr :: I.Expr -> V Expr
@@ -498,6 +493,7 @@ acl2 a = case a of
     Negate -> 0 - (expr a)
     Abs    -> A.if' (expr a A.>=. 0) (expr a) (0 - (expr a))
     Signum -> A.if' (expr a A.>. 0) 1 $ A.if' (expr a A.<. 0) (-1) 0
+    IsArray -> A.or' (A.equal A.nil $ expr a) (A.consp $ expr a)
   BinOp op a b -> op' (expr a) (expr b)
     where
     op' = case op of

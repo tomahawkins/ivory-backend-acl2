@@ -1,15 +1,15 @@
 -- | Convert CLL to CPS.
-module Mira.CPSConvert
+module Ivory.Compile.ACL2.CPSConvert
   ( cpsConvert
   ) where
 
 import Data.List (delete)
 import MonadLib
 
-import qualified Mira.CLL as C
-import Mira.CPS
-import Mira.Expr (Expr, Intrinsic (Add, Sub, Le, Ge))
-import qualified Mira.Expr as E
+import qualified Ivory.Compile.ACL2.CLL as C
+import Ivory.Compile.ACL2.CPS
+import Ivory.Compile.ACL2.Expr (Expr, Intrinsic (Add, Sub, Le, Ge))
+import qualified Ivory.Compile.ACL2.Expr as E
 
 cpsConvert :: [C.Proc] -> [Proc]
 cpsConvert = snd . snd . runId . runStateT (0, []) . mapM cpsConvertProc

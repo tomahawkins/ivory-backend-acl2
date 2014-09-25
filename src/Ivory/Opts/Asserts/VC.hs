@@ -1,4 +1,4 @@
-module Mira.VC
+module Ivory.Opts.Asserts.VC
   ( Expr (..)
   , UniOp (..)
   , BinOp (..)
@@ -14,6 +14,7 @@ module Mira.VC
   , false
   , if'
   , length'
+  , isArray
   , (==.)
   , (<.)
   , (<=.)
@@ -51,6 +52,7 @@ data UniOp
   | Negate
   | Abs
   | Signum
+  | IsArray
   deriving Eq
 
 data BinOp
@@ -88,11 +90,12 @@ instance Show Expr where
 
 instance Show UniOp where
   show a = case a of
-    Not -> "!"
-    Length -> "length"
-    Negate -> "negate"
-    Abs    -> "abs"
-    Signum -> "signum"
+    Not     -> "!"
+    Length  -> "length"
+    Negate  -> "negate"
+    Abs     -> "abs"
+    Signum  -> "signum"
+    IsArray -> "isArray"
 
 instance Show BinOp where
   show a = case a of
@@ -138,6 +141,7 @@ a <=. b = (a <. b) ||. (a ==. b)
 (>.) = BinOp Gt
 a >=. b = (a >. b) ||. (a ==. b)
 mod' = BinOp Mod
+isArray = UniOp IsArray
 
 optimize :: Expr -> Expr
 optimize = optRemoveNullEffect . optConstantProp . optInline . optRemoveNullEffect . optConstantProp
@@ -239,6 +243,28 @@ optConstantProp' env a = case a of
     Bool a -> Bool $ not a
     a      -> UniOp Not a
 
+  UniOp Negate a -> case opt a of
+    Integer a -> Integer $ negate a
+    a -> UniOp Negate a
+
+  UniOp Abs a -> case opt a of
+    Integer a -> Integer $ abs a
+    a -> UniOp Abs a
+
+  UniOp Signum a -> case opt a of
+    Integer a -> Integer $ signum a
+    a -> UniOp Signum a
+
+  UniOp Length a -> case opt a of
+    Array a -> Integer $ fromIntegral $ length a
+    a -> UniOp Length a
+
+  UniOp IsArray a -> case opt a of
+    Array _ -> Bool True
+    ArrayAppend _ _ -> Bool True
+    ArrayUpdate _ _ _ -> Bool True
+    a -> UniOp IsArray a
+
   BinOp And a b -> case (opt a, opt b) of
     (Bool a, Bool b) -> Bool $ a && b
     (Bool False, _)  -> false
@@ -306,22 +332,6 @@ optConstantProp' env a = case a of
   BinOp Mod a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Integer $ mod a b
     (a, b) -> BinOp Mod a b
-
-  UniOp Negate a -> case opt a of
-    Integer a -> Integer $ negate a
-    a -> UniOp Negate a
-
-  UniOp Abs a -> case opt a of
-    Integer a -> Integer $ abs a
-    a -> UniOp Abs a
-
-  UniOp Signum a -> case opt a of
-    Integer a -> Integer $ signum a
-    a -> UniOp Signum a
-
-  UniOp Length a -> case opt a of
-    Array a -> Integer $ fromIntegral $ length a
-    a -> UniOp Length a
 
   Var    a     -> case lookup a env of
     Nothing -> Var a

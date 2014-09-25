@@ -1,4 +1,4 @@
-# Ivory ACL2 Backend
+# Ivory to ACL2 compilation and Ivory assertion verification and optimzation.
 
 [Ivory](https://github.com/GaloisInc/ivory) is a C like DSL embedded in [Haskell](http://haskell.org)
 for hard realtime embedded applications.  [Galois](http://corp.galois.com/) is currently
@@ -18,10 +18,6 @@ This ivory-backend-acl2 library provides a means to compile Ivory programs to AC
 
 1. Install Ivory's ACL2 backend:
    1. Clone the [ivory-backend-acl2](https://github.com/tomahawkins/ivory-backend-acl2) repo.
-   1. Build and install the mira library:
-
-      `$ cd <ivory-backend-acl2-directory>/mira && cabal install`
-
    1. Build and install the ivory-backend-acl2 library:
 
       `$ cd <ivory-backend-acl2-directory>/ivory-backend-acl2 && cabal install`
@@ -146,6 +142,10 @@ of the Ivory to ACL2 compiler flow:
   and all function calls become tail-calls.
   This CPS IR provides the following continuation types:  Halt, Call, Return, Let, If, and Assert.
   In addition, this IR also provides for explicit stack operations (Push, Pop).
+
+# Assertion Verification Performance
+
+- mavlinkSendWithWriter: 5 of 7
 
 
 # Ivory Language Coverage

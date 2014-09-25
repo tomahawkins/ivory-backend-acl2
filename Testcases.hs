@@ -1,4 +1,4 @@
--- Testcases for Ivory to ACL2 compilation.
+-- Testcases for assertion optimization and Ivory to ACL2 compilation.
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
@@ -10,12 +10,37 @@
 
 module Main (main) where
 
+import qualified Language.ACL2 as A
+
 import Ivory.Language
 import Ivory.Compile.ACL2
 import Ivory.Opts.Asserts
-import qualified Mira.ACL2 as A
 
---type Stmt = forall s . Ivory (ProcEffects s ()) ()
+main :: IO ()
+main = do
+  -- Tests of assertion optimization, i.e. verification and removal of assertions.
+  _ <- assertsFold $ 
+    [ package "assertionOptimiationTest" $ do 
+        incl factorial
+        incl intrinsicTest
+        incl wait
+        incl waitLoop
+        incl loopTest
+        incl structTest
+        incl arrayTest
+    ]
+
+  -- Tests of Ivory-to-ACL2 compilation.
+  testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
+  testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
+  testThm "loopTest  8 ==  8" loopTest   $ A.equal  8 $ A.cdr $ A.call "loopTest"   [A.nil, 8]
+  testThm "structTest  == 22" structTest $ A.equal 22 $ A.cdr $ A.call "structTest" [A.nil]
+  where
+  testThm name func thm = do
+    pass <- A.check $ compile (package name $ incl func) ++ [A.thm thm]
+    if pass
+      then putStrLn $ "pass: " ++ name
+      else putStrLn $ "FAIL: " ++ name
 
 intrinsicTest :: Def ('[IBool, Sint32] :-> ())
 intrinsicTest = proc "intrinsicTest" $ \ cond1 num1 -> requires (num1 ==? 22) $ body $ do
@@ -95,7 +120,6 @@ waitLoop = proc "waitLoop" $ \ n i iters ->
       ( do
         itersValue <- deref iters
         store iters $ itersValue + 1
-        -- Call W not implemented.
         assert $ n >? i
         assert $ i >? 0
         call_ waitLoop (n - i) i iters
@@ -105,7 +129,10 @@ waitLoop = proc "waitLoop" $ \ n i iters ->
 
 -- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)
-factorial  = proc "factorial" $ \ n -> body $
+factorial  = proc "factorial" $ \ n -> 
+  requires (n >=? 1) $
+  ensures  (>=? n) $
+  body $
   ifte_ (n >? 1)
    (do n' <- call factorial (n - 1)
        ret (n' * n)
@@ -164,31 +191,3 @@ arrayTest = proc "arrayTest" $ ensures (==? 6) $ body $ do
   deref sum >>= ret
 
 
-
-verifyAssertions :: Module -> IO ()
-verifyAssertions m = assertsFold [m] >> return ()
-
-main :: IO ()
-main = do
-  --mapM_ print $ compile (package "arrayTest" $ incl arrayTest)
-  verifyAssertions $ package "assertOptTest" $ do
-    incl intrinsicTest
-    incl wait
-    incl waitLoop
-    incl structTest
-    incl arrayTest
-
-  --test "assertions: arrayTest"      $ verifyAssertions  $ package "arrayTest"     $ incl arrayTest
-  --testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
-  --testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
-  --testThm "loopTest  8 ==  8" loopTest   $ A.equal  8 $ A.cdr $ A.call "loopTest"   [A.nil, 8]
-  --testThm "structTest  == 22" structTest $ A.equal 22 $ A.cdr $ A.call "structTest" [A.nil]
-  where
-  testThm name func thm = test name $ A.check $ compile (package name $ incl func) ++ [A.thm thm]
-
-  test :: String -> IO Bool -> IO ()
-  test name action = do
-    pass <- action
-    if pass
-      then putStrLn $ "pass: " ++ name
-      else putStrLn $ "FAIL: " ++ name

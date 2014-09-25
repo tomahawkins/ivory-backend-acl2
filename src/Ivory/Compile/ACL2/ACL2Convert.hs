@@ -1,15 +1,16 @@
 -- | Compile CPS to ACL2.
-module Mira.ACL2Convert
+module Ivory.Compile.ACL2.ACL2Convert
   ( acl2Convert
   ) where
 
 import MonadLib
 
-import Mira.ACL2
-import Mira.CPS
-import Mira.Expr (intrinsicACL2, showLit)
-import qualified Mira.Expr as E
-import Mira.RecTopoSort
+import Language.ACL2
+
+import Ivory.Compile.ACL2.CPS
+import Ivory.Compile.ACL2.Expr (intrinsicACL2, showLit)
+import qualified Ivory.Compile.ACL2.Expr as E
+import Ivory.Compile.ACL2.RecTopoSort
 
 type CN = StateT (Int, [Expr]) Id
 

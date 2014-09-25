@@ -1,5 +1,5 @@
 -- | A CPS IR.
-module Mira.CPS
+module Ivory.Compile.ACL2.CPS
   ( Proc         (..)
   , Value        (..)
   , Literal      (..)
@@ -17,8 +17,8 @@ module Mira.CPS
 import Data.List
 import Text.Printf
 
-import Mira.Expr hiding (Expr (..))
-import qualified Mira.Expr as E
+import Ivory.Compile.ACL2.Expr hiding (Expr (..))
+import qualified Ivory.Compile.ACL2.Expr as E
 
 -- | A procedure is a name, a list of arguments, an optional measure, and its continuation (body).
 data Proc = Proc Var [Var] (Maybe E.Expr) Cont deriving Eq

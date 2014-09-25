@@ -1,5 +1,5 @@
 -- | Recursive topological sort.
-module Mira.RecTopoSort
+module Ivory.Compile.ACL2.RecTopoSort
   ( recTopoSort
   , allDependencies
   ) where

@@ -1,5 +1,5 @@
 -- | CLL: A C Like Language.
-module Mira.CLL
+module Ivory.Compile.ACL2.CLL
   ( Proc    (..)
   , Stmt    (..)
   , Expr    (..)
@@ -10,7 +10,7 @@ module Mira.CLL
 import Data.List
 import Text.Printf
 
-import Mira.Expr
+import Ivory.Compile.ACL2.Expr
 
 data Proc = Proc 
   { procName     :: Var
