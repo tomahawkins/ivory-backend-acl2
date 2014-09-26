@@ -1,11 +1,12 @@
-# Ivory to ACL2 compilation and Ivory assertion verification and optimzation.
+# Ivory Assertion Verification and Compilation to ACL2
 
 [Ivory](https://github.com/GaloisInc/ivory) is a C like DSL embedded in [Haskell](http://haskell.org)
 for hard realtime embedded applications.  [Galois](http://corp.galois.com/) is currently
 using Ivory to build a [quadcopter autopilot](http://smaccmpilot.org/) for [DARPA](http://www.darpa.mil/)'s
 [HACMS](http://www.darpa.mil/Our_Work/I2O/Programs/High-Assurance_Cyber_Military_Systems_(HACMS).aspx) program.
 
-This ivory-backend-acl2 library provides a means to compile Ivory programs to ACL2 for formal analysis.
+This library provides a means to verify Ivory assertions, and hence optimize them out of the generated code,
+and to compile complete Ivory programs into ACL2 for higher levels of formal verification.
 
 # Installation
 
@@ -27,7 +28,44 @@ This ivory-backend-acl2 library provides a means to compile Ivory programs to AC
 
    `$ export ACL2_SOURCES=<path-to-acl2-sources>`
 
-# An Example
+# Verifying and Optimizing Out Ivory Assertions
+
+This library provides the `Ivory.Opts.Asserts.assertsFold` function to check
+and optimize away verified assertions in an Ivory program:
+
+```haskell
+assertsFold :: [Module] -> IO [Module]
+```
+
+The optimization function traverses the entire program, analyzing each functions' assertions, `requires`, and `ensures`.
+Interprocedural analysis is performed by using callees' `requires` and `ensures` contracts, but abstracts the function's body.
+Each assertion is translated into an intermediate
+[verification conditions language](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/src/Ivory/Opts/Asserts/VC.hs) (VC),
+which is then translated to ACL2 and checked.  Assertions that prove correct are rewritten as Ivory comments to help annotate
+the generated code and assertions that fail remain in place to serve as runtime checks.
+During the analysis, prior assertions in a program serve as lemmas for later ones.
+Therefore, assertions are not only used to capture program intent, they also aid the verification of more complex properties.
+
+## The Verification Condition (VC) Intermediate Language
+
+TODO
+
+## Possible Future Extensions
+
+1. Modeling a non-empty stack as a starting condition.  (A free initial stack sometimes gave ACL2 trouble, e.g. structTest.)
+1. Analyzing functions for purity and maintaining the stack across pure function calls.
+1. Loop analysis.
+1. Bring global state into the stack.
+1. Checking all call-sites to optimize out input contracts (requires).
+1. Targeting other provers (SMT).
+
+
+# Compiling Ivory into ACL2
+
+In addition to verifying assertions, this library provides means to translate Ivory programs to ACL2,
+enabling higher level properties (written in ACL2) to be verified against Ivory implementations.
+
+## An Example
 
 In this example we will write a factorial function in Ivory, compile it to ACL2,
 and then prove termination and other properties of the function.
@@ -118,7 +156,7 @@ main = do
 Rerunning the program should yield `factorial 4 == 24: pass`.
 
 
-# A Closer Look at the Compilation Process
+## A Closer Look at the Compilation Process
 
 Running the above example produces the following files,
 which are the various intermediate representations (IRs)
@@ -129,23 +167,19 @@ of the Ivory to ACL2 compiler flow:
   The first step in the translation converts the
   [Ivory AST](https://github.com/GaloisInc/ivory/blob/master/ivory/src/Ivory/Language/Syntax/AST.hs)
   to a smaller, simpler form called
-  [CLL](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/CLL.hs).
+  [CLL](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/src/Ivory/Compile/ACL2/CLL.hs).
   This smaller language provides top level function definitions
   and Call, If, Return, Assert, Let, and Loop statements
-  along with a host of [Expressions](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/Expr.hs).
+  along with a host of [Expressions](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Ivory/Compile/ACL2/Expr.hs).
 
 1. CPS
 
   From CLL we then translate into a continuation passing style
-  ([CPS](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/mira/src/Mira/CPS.hs))
+  ([CPS](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/src/Ivory/Compile/ACL2/CPS.hs))
   form.  In CPS expression evaluation order is made explicit
   and all function calls become tail-calls.
   This CPS IR provides the following continuation types:  Halt, Call, Return, Let, If, and Assert.
   In addition, this IR also provides for explicit stack operations (Push, Pop).
-
-# Assertion Verification Performance
-
-- mavlinkSendWithWriter: 5 of 7
 
 
 # Ivory Language Coverage
@@ -167,10 +201,10 @@ Loop           | A loop over a fixed iteration.                      | X        
 Store          | A store operation to a variable, array, or struct.  | X           | loopTest
 AllocRef       | Allocation reference.                               | X           | loopTest
 Defef          | Pointer dereference.                                | X           | loopTest 
-Assign         | Variable assignment.                                |             |          
+Assign         | Variable assignment.                                | X           |          
+RefCopy        | Copy a reference.                                   | X           |          
 Forever        | A forever loop.                                     |             |          
 Break          | A break statement for a loop.                       |             |          
-RefCopy        |                                                     |             |          
 
 ## Ivory Expressions
 
