@@ -170,10 +170,7 @@ structTest = proc "structTest" $ ensures (==? 22) $ body $ do
 arrayTest :: Def ('[] :-> Uint32)
 arrayTest = proc "arrayTest" $ ensures (==? 6) $ body $ do
   -- Allocate a 4 element array with zeros: [0, 0, 0, 0]
-  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 1
-
-  --a <- deref $ array ! 0
-  --assert $ a ==? 1
+  (array :: Ref (Stack cs) (Array 4 (Stored Uint32))) <- local $ iarray $ replicate 4 $ ival 0
 
   -- Iterate over the array making it: [0, 1, 2, 3]
   arrayMap $ \ i -> store (array ! i) $ safeCast i  --XXX Having both this loop and the loop below gives ACL2 troubles.

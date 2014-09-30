@@ -30,34 +30,32 @@ and to compile complete Ivory programs into ACL2 for higher levels of formal ver
 
 # Verifying and Optimizing Out Ivory Assertions
 
-This library provides the `Ivory.Opts.Asserts.assertsFold` function to check
-and optimize away verified assertions in an Ivory program:
+The library provides the function `Ivory.Opts.Asserts.assertsFold` to check
+and remove verified assertions in an Ivory program:
 
 ```haskell
 assertsFold :: [Module] -> IO [Module]
 ```
 
-The optimization function traverses the entire program, analyzing each functions' assertions, `requires`, and `ensures`.
-Interprocedural analysis is performed by using callees' `requires` and `ensures` contracts, but abstracts the function's body.
+`assertsFold` traverses the entire program, analyzing each functions' assertions and input and output contracts
+(`requires` and `ensures`).
+Interprocedural analysis is handled by using callees' IO contracts to abstract the function's body.
 Each assertion is translated into an intermediate
-[verification conditions language](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/src/Ivory/Opts/Asserts/VC.hs) (VC),
-which is then translated to ACL2 and checked.  Assertions that prove correct are rewritten as Ivory comments to help annotate
-the generated code and assertions that fail remain in place to serve as runtime checks.
+[verification conditions language](https://github.com/tomahawkins/ivory-backend-acl2/blob/master/src/Ivory/Opts/Asserts/VC.hs)
+(VC), which is then translated to ACL2 and checked.
+Assertions that prove correct are rewritten as Ivory comments to annotate
+the generated code.  Assertions that fail remain in place as runtime checks.
 During the analysis, prior assertions in a program serve as lemmas for later ones.
-Therefore, assertions are not only used to capture program intent, they also aid the verification of more complex properties.
-
-## The Verification Condition (VC) Intermediate Language
-
-TODO
 
 ## Possible Future Extensions
 
-1. Modeling a non-empty stack as a starting condition.  (A free initial stack sometimes gave ACL2 trouble, e.g. structTest.)
-1. Analyzing functions for purity and maintaining the stack across pure function calls.
-1. Loop analysis.
-1. Bring global state into the stack.
-1. Checking all call-sites to optimize out input contracts (requires).
-1. Targeting other provers (SMT).
+* Modeling a non-empty stack as a starting condition.
+  * A free initial stack sometimes gave ACL2 trouble, e.g. structTest.
+* Analyzing functions for purity and maintaining the stack across pure function calls.
+* Loop analysis.
+* Use the stack to handle global memory areas.
+* Checking all call-sites to optimize out input contracts (requires).
+* Targeting other provers (SMT).
 
 
 # Compiling Ivory into ACL2
