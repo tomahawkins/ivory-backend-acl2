@@ -1,11 +1,13 @@
 -- | Verifies and removes assertions from an Ivory program.
 module Ivory.Opts.Asserts
   ( assertsFold
+  , Report (..)
   ) where
 
 import Data.List
 import Data.Maybe
 import MonadLib
+import System.IO
 import Text.Printf
 
 import qualified Language.ACL2 as A
@@ -15,9 +17,19 @@ import qualified Ivory.Language.Syntax.Type as I
 import Ivory.Compile.ACL2 (var)
 import Ivory.Opts.Asserts.VC
 
+-- | What to report during analysis.
+data Report
+  = Progress     -- ^ The specific check as they are happening.
+  | Failure      -- ^ Checks that fail to prove.
+  | VC           -- ^ The generated verification condition (VC).
+  | VCOpt        -- ^ The optimized VC.
+  | ACL2         -- ^ The optimized VC translated to ACL2.
+  | ACL2Result   -- ^ The result from ACL2.
+  deriving Eq
+
 -- | Analyze an entire Ivory program, removing as many assertions as possible.
-assertsFold :: [I.Module] -> IO [I.Module]
-assertsFold modules = mapM analyzeModule modules
+assertsFold :: [Report] -> [I.Module] -> IO [I.Module]
+assertsFold reports modules = mapM analyzeModule modules
   where
   analyzeModule :: I.Module -> IO I.Module
   analyzeModule m = do
@@ -54,9 +66,10 @@ assertsFold modules = mapM analyzeModule modules
         , env          = undefined
         , stack        = undefined
         , returns      = []
+        , reports      = reports
         }
 
--- Data carried through verification monad.
+-- Data carried through the verification monad.
 data VDB = VDB
   { nextVCId     :: Int
   , nextBCId     :: Int
@@ -72,10 +85,21 @@ data VDB = VDB
   , env          :: Expr
   , stack        :: Expr
   , returns      :: [Expr]
+  , reports      :: [Report]
   }
 
 -- Verification monad.
 type V a = StateT VDB IO a
+
+-- Report a message.
+report :: Report -> String -> V ()
+report r msg = do
+  m <- get
+  if elem r $ reports m
+    then lift $ do
+      putStr msg
+      hFlush stdout
+    else return ()
 
 -- Name of current procedure undergoing analysis.
 procName :: V String
@@ -244,9 +268,9 @@ checkEnsure ensure@(I.Ensure a) = do
   checkEnsureReturn :: Expr -> V Bool
   checkEnsureReturn check = do
     proc <- procName
-    lift $ printf "Checking ensure at return point:  procedure = %s  ensure = %s\n" proc (show check)
+    report Progress $ printf "Checking ensure at return point:  procedure = %s  ensure = %s\n" proc (show check)
     pass <- checkVC check
-    if pass then return () else lift $ putStrLn $ "FAIL: Ensure failed in " ++ proc ++ ": " ++ show ensure ++ "\n"
+    if pass then return () else report Failure $ "FAIL: Ensure failed in " ++ proc ++ ": " ++ show ensure ++ "\n"
     return pass
 
 -- Check a sub require condition on a function call.
@@ -254,9 +278,9 @@ checkSubRequire :: String -> I.Require -> V Bool
 checkSubRequire callee req@(I.Require a) = do
   check <- condition Nothing a
   caller <- procName
-  lift $ printf "Checking sub-require:  caller = %s  callee = %s  require = %s\n"  caller callee (show check)
+  report Progress $ printf "Checking sub-require:  caller = %s  callee = %s  require = %s\n"  caller callee (show check)
   pass <- checkVC check
-  if pass then return () else lift $ putStrLn $ "FAIL: Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req ++ "\n"
+  if pass then return () else report Failure $ "FAIL: Require failed in " ++ callee ++ " when called from " ++ caller ++ ": " ++ show req ++ "\n"
   return pass
 
 -- Assume a sub ensure condition when a function call returns.
@@ -268,13 +292,13 @@ checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
 checkAssert stmt check = do
   proc <- procName
   check <- expr check
-  lift $ printf "Checking assert:  procedure = %s  assert = %s\n" proc (show check)
+  report Progress $ printf "Checking assert:  procedure = %s  assert = %s\n" proc (show check)
   pass <- checkVC check
   if pass
     then do
       return $ I.Comment $ "Assertion verified: " ++ show stmt
     else do
-      lift $ putStrLn $ "FAIL: Assertion failed in " ++ proc ++ ": " ++ show stmt ++ "\n"
+      report Failure $ "FAIL: Assertion failed in " ++ proc ++ ": " ++ show stmt ++ "\n"
       return stmt
 
 -- Checks a verification condition then adds it to the list of lemmas.
@@ -284,18 +308,15 @@ checkVC a = do
   m <- get
   let thm = body m $ implies (foldl (&&.) true $ lemmas m) a
       optimizedThm = optimize thm
+  report VC    $ "VC:\n" ++ show thm ++ "\n"
+  report VCOpt $ "Optimized VC:\n" ++ show optimizedThm ++ "\n"
+  report ACL2  $ "Optimized VC in ACL2:\n" ++ (show $ A.thm $ acl2 optimizedThm) ++ "\n"
   pass <- case optimizedThm of
     Bool a -> return a -- Don't call ACL2 if the result is obvious.
-    thm -> lift $ A.check [A.thm $ acl2 thm]
-  if pass
-    then return ()
-    else do
-      lift $ putStrLn "VC:"
-      lift $ print thm
-      lift $ putStrLn "\nOptimized VC:"
-      lift $ print optimizedThm
-      lift $ putStrLn "\nOptimized VC in ACL2:"
-      lift $ print $ A.thm $ acl2 optimizedThm
+    thm -> do
+      (pass, result) <- lift $ A.check' [A.thm $ acl2 thm]
+      report ACL2Result $ "ACL2 Result:\n" ++ result ++ "\n"
+      return pass
   m <- get
   set m { lemmas = lemmas m ++ [a] }
   return pass

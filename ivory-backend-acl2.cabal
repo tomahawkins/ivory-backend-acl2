@@ -17,7 +17,7 @@ library
     base     >= 4.0,
     process  >= 1.1,
     monadLib >= 3.7.2,
-    acl2     >= 0.0.0,
+    acl2     >= 0.0.1,
     ivory
   exposed-modules:
     Ivory.Compile.ACL2

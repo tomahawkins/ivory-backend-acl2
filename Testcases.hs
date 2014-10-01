@@ -19,8 +19,8 @@ import Ivory.Opts.Asserts
 main :: IO ()
 main = do
   -- Tests of assertion optimization, i.e. verification and removal of assertions.
-  _ <- assertsFold $ 
-    [ package "assertionOptimiationTest" $ do 
+  _ <- assertsFold [Progress, Failure] {-, VC, VCOpt, ACL2, ACL2Result] -} $ 
+    [ package "assertsFoldTest" $ do 
         incl factorial
         incl intrinsicTest
         incl wait
