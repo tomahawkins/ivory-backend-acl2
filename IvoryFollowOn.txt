@@ -1,0 +1,111 @@
+Possible Follow-on Activities for Ivory/ACL2:
+
+In the present form, the interprocedural analysis (VC generation)
+uses an overly conservative model for procedure calls with regard to 
+the stack and global memory.  Without a more detailed analysis,
+we have to assume that any parts of the stack can be modified by 
+a call, which leads to many spurious assertion failures that
+involve references.  For example, a procedure many allocate and
+set a reference, call a sub procedure, and then assert a condition
+on the reference after the call.  Without strengthening the sub
+procedure's IO contracts, chances are this assertion will fail
+to prove correct, even though it very well maybe.
+
+One approach to loosening these restrictions is to perform a pre-analysis
+to determine which procedures are pure versus impure, where pure procedure
+maintains the stack integrity across calls.  Even purity is more
+conservative than needed; all we really need is to determine if a 
+procedure performs store operations.  This would just involve walking
+the AST for each procedure, looking for 'Store' constructors, and
+tabling the results for use in VC generation.
+(~ 1 week of effort.)
+
+Taken a step further, we can analyze which
+areas of the stack are modified by procedures that "Store" by determining
+how deep references can reach (how much of the stack they can touch),
+and how they can escape into sub procedure calls.  Though it is unlikely
+such an analysis would always determine the precise areas of the stack
+that can be modified, it should be able to do much better than the
+blanketed approach of assuming the entire stack could be altered.
+(~ 4 weeks of effort.)
+
+Another area where modeling is overly conservative is loops:
+like procedures, the VC analysis assumes a loop can alter the
+entire stack.  However, we suspect that the methods stated above to shore up 
+stateful procedure analysis would also be applicable to loop operations.
+(~ 3 weeks of effort.)
+
+With the current analysis, the only type of assertion that is not removed 
+from the program is input contracts (requires).  This somewhat simplified
+recursive procedure analysis.  Yet if we were to verify the input
+contracts for every call site, these contracts could be optimized out of the
+program.  The only additional piece that would be needed is a specification
+of entry points, such that those procedures either retain their contracts,
+or the contracts are transferred to the external call sites.
+(~ 1 week of effort.)
+
+One difficulty with verification in this system is that ACL2 does
+not provide much useful feedback to the software engineer when an
+assertion fails to proves.  One thing that would help
+"debug" failed proofs are counter examples, specifically a program
+state the leads to concrete assertion violations.  These counter examples
+could be obtained by retargeting the VC proofs to SMT solvers.
+The VC is already a well established IR in the analysis tools, which makes retargeting
+the backend fairly simple.  The only difficulty maybe finding an SMT solver
+that supports all the VCs features; arrays and records probably
+being the most problematic.  Another advantage of targeting SMT is
+the availability of multiple solvers (Yices, CVC4, Z3, etc).
+These coupled with ACL2 could provide a good diversity of prove engines that may
+yield better overall performance, e.g. some solvers may handle
+certain problems better than others.
+(~ 4 weeks of effort.)
+
+Another drawback of using ACL2 at the backend is the lack of 
+floating point support, which restricts useful analysis to
+integer only procedures -- SMACCMs makes extensive use of
+floating point.  With a move to SMT, this opens the door to
+to performing real number analysis; not exactly floating point, but close.
+Assuming VC already targets SMT, augmenting the VC IR to capture
+real numbers would be straight forward.
+(~ 1 week of effort.)
+
+
+
+
+Older stuff
+
+
+Possible tasks outside scope of ACL2 interprocedural analysis.
+
+9. Floating and fixed precision analysis.
+
+  Much of the autopilot is coding in floating point, primarily for developer convenience.
+  But fixed point algorithms run faster and are more amenable to formal analysis.
+  Investigate tools, possibly developing our own, to convert real (floating
+  point) algorithms to fixed point w/o loss of correctness.
+  In case of control laws, analysis may require discrete time models of 
+  aircraft dynamics.
+
+10. Continuous time formal analysis.
+
+  Combine Ivory with continuous time models of aircraft to formally verify control
+  performance requirements such as rise time, steady state tracking, disturbance rejection,
+  and robustness to model uncertainties.
+
+11. Automatic thread scheduling.
+
+  Investigate ways to automatic thread scheduling to achieve a tractable WCET analysis.
+  This could involve analyzing a multithreaded Ivory program to determine interthread dependencies
+  then building a static schedule to maximize data rate or minimize execution time.
+
+12. Compiling other DSLs into Ivory.
+
+  Perhaps look at safe (i.e. restrictive) languages, such as languages to
+  describe state machines, dataflow computation, protocol descriptions,
+  cryptography descriptions (e.g. Cryptol).
+
+13. Ivory IFC.
+
+  Augment Ivory with a subset of IFC mechanisms from SAFE and build tooling
+  to formally verify security properties.
+
