@@ -288,15 +288,15 @@ assumeSubEnsure :: Expr -> I.Ensure -> V ()
 assumeSubEnsure ret (I.Ensure a) = condition (Just ret) a >>= addLemma
 
 -- Verified assertions are turned into comments.
-checkAssert :: I.Stmt -> I.Expr -> V I.Stmt
-checkAssert stmt check = do
+checkAssert :: Bool -> I.Stmt -> I.Expr -> V I.Stmt
+checkAssert compilerAssert stmt check = do
   proc <- procName
   check <- expr check
-  report Progress $ printf "Checking assert:  procedure = %s  assert = %s\n" proc (show check)
+  report Progress $ printf "Checking %sassert:  procedure = %s  assert = %s\n" (if compilerAssert then "compiler " else "") proc (show check)
   pass <- checkVC check
   if pass
     then do
-      return $ I.Comment $ "Assertion verified: " ++ show stmt
+      return $ I.Comment $ I.UserComment $ "Assertion verified: " ++ show stmt
     else do
       report Failure $ "FAIL: Assertion failed in " ++ proc ++ ": " ++ show stmt ++ "\n"
       return stmt
@@ -357,10 +357,10 @@ block = mapM stmt
 -- Rewrite statements.
 stmt :: I.Stmt -> V I.Stmt
 stmt a = case a of
-  I.Comment        c -> comment ("Ivory comment: " ++ c) >> return a
-  I.Assert         b -> checkAssert a b
-  I.CompilerAssert b -> checkAssert a b
-  I.Assume         b -> checkAssert a b
+  I.Comment        _ -> {- comment ("Ivory comment: " ++ c) >> -} return a
+  I.Assert         b -> checkAssert False a b
+  I.CompilerAssert b -> checkAssert True  a b
+  I.Assume         b -> checkAssert False a b
 
   I.IfTE a b c -> do
     comment' "If statement." $ do

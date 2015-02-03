@@ -13,13 +13,16 @@ module Main (main) where
 import qualified Language.ACL2 as A
 
 import Ivory.Language
+import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Compile.ACL2
 import Ivory.Opts.Asserts
+import Ivory.Opts.Index
+import Ivory.Opts.Overflow
 
 main :: IO ()
 main = do
   -- Tests of assertion optimization, i.e. verification and removal of assertions.
-  _ <- assertsFold [Progress, Failure] {-, VC, VCOpt, ACL2, ACL2Result] -} $ 
+  _ <- assertsFold [Progress, Failure] {-VC, VCOpt, ACL2, ACL2Result] -} $ map optimizeModule
     [ package "assertsFoldTest" $ do 
         incl factorial
         incl intrinsicTest
@@ -28,6 +31,8 @@ main = do
         incl loopTest
         incl structTest
         incl arrayTest
+        incl retractLandingGear
+        incl commandLandingGearUp
     ]
 
   -- Tests of Ivory-to-ACL2 compilation.
@@ -41,6 +46,11 @@ main = do
     if pass
       then putStrLn $ "pass: " ++ name
       else putStrLn $ "FAIL: " ++ name
+
+optimizeModule :: I.Module -> I.Module
+optimizeModule m = m { I.modProcs = I.Visible
+                         (map (ixFold {-. overflowFold -}) $ I.public  $ I.modProcs m)
+                         (map (ixFold {-. overflowFold -}) $ I.private $ I.modProcs m) }
 
 intrinsicTest :: Def ('[IBool, Sint32] :-> ())
 intrinsicTest = proc "intrinsicTest" $ \ cond1 num1 -> requires (num1 ==? 22) $ body $ do
@@ -126,6 +136,20 @@ waitLoop = proc "waitLoop" $ \ n i iters ->
         retVoid
       )
       retVoid
+
+retractLandingGear :: Def ('[IBool, Sint32] :-> ())
+retractLandingGear = proc "retractLandingGear" $ \ weightOnWheels airspeed -> body $ do
+  ifte_ (iNot weightOnWheels .&& airspeed >? 70)
+    (do
+      assert $ iNot weightOnWheels
+      assert $ airspeed >? 70
+      call_ commandLandingGearUp
+      retVoid
+    )
+    retVoid
+
+commandLandingGearUp :: Def ('[] :-> ())
+commandLandingGearUp = proc "commandLandingGearUp" $ body retVoid
 
 -- Factorial of a number.
 factorial :: Def ('[Sint32] :-> Sint32)
