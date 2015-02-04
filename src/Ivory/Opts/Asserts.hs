@@ -42,7 +42,7 @@ assertsFold reports modules = mapM analyzeModule modules
       (p, _) <- runStateT init $ comment' (printf "Procedure: %s(%s)" (I.procSym proc) $ intercalate ", " [ var $ I.tValue a | a <- I.procArgs proc ]) $ do
         newStack $ const $ Array []  -- Start with an empty stack.  Starting with a free stack sometimes cause problems for proofs.
         comment' "Procedure arguments and initial environment." $ do
-          argVars <- mapM (const newFree) args
+          argVars <- mapM newArg $ I.procArgs proc
           newEnv $ Record [ (a, b) | (a, b) <- zip args argVars ]
         comment' "Assuming requires." $ mapM_ assumeRequire $ I.procRequires proc
         body <- comment' "Procedure body. " $ block $ I.procBody proc
@@ -50,6 +50,14 @@ assertsFold reports modules = mapM analyzeModule modules
         return $ proc { I.procBody = body, I.procEnsures = ensures }
       return p
       where
+      newArg a = do
+        a' <- newFree
+        case I.tType a of
+          I.TyInt   _ -> addLemma $ isInt a'
+          I.TyWord  _ -> addLemma $ isInt a'
+          I.TyIndex _ -> addLemma $ isInt a'
+          _ -> return ()
+        return a'
       args = map (var . I.tValue) $ I.procArgs proc
       init = VDB
         { nextVCId     = 0
@@ -419,7 +427,7 @@ stmt a = case a of
 
   I.Assign _ v b   -> expr b >>= extendEnv (var v) >> return a
 
-  I.Call  _ ret f args  -> do
+  I.Call  retType ret f args  -> do
     p <- getProc $ var f
     comment' (printf "Calling procedure:  %s(%s)" (var f) $ intercalate ", " [ var $ I.tValue a | a <- I.procArgs p ]) $ do
       returnValue <- withEnv $ do
@@ -429,6 +437,11 @@ stmt a = case a of
         comment' "Checking sub-requires." $ mapM_ (checkSubRequire $ var f) $ I.procRequires p  -- XXX Need to collect results for all call sites to be able to remove requires.
         freeStack
         returnValue <- comment' "Return value." newFree
+        case retType of
+          I.TyInt   _ -> addLemma $ isInt returnValue
+          I.TyWord  _ -> addLemma $ isInt returnValue
+          I.TyIndex _ -> addLemma $ isInt returnValue
+          _ -> return ()
         comment' "Assuming sub-ensures." $ mapM_ (assumeSubEnsure returnValue) $ I.procEnsures p
         return returnValue
       case ret of
@@ -509,12 +522,13 @@ acl2 a = case a of
   RecordOverlay a b  -> A.append (expr a) (expr b)
   RecordProject a b -> A.cdr $ A.assoc (A.string b) (expr a)
   UniOp op a -> case op of
-    Not    -> A.not' $ expr a
-    Length -> A.len  $ expr a
-    Negate -> 0 - (expr a)
-    Abs    -> A.if' (expr a A.>=. 0) (expr a) (0 - (expr a))
-    Signum -> A.if' (expr a A.>. 0) 1 $ A.if' (expr a A.<. 0) (-1) 0
+    Not     -> A.not' $ expr a
+    Length  -> A.len  $ expr a
+    Negate  -> 0 - (expr a)
+    Abs     -> A.if' (expr a A.>=. 0) (expr a) (0 - (expr a))
+    Signum  -> A.if' (expr a A.>. 0) 1 $ A.if' (expr a A.<. 0) (-1) 0
     IsArray -> A.or' (A.equal A.nil $ expr a) (A.consp $ expr a)
+    IsInt   -> A.integerp $ expr a
   BinOp op a b -> op' (expr a) (expr b)
     where
     op' = case op of

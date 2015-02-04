@@ -15,6 +15,7 @@ module Ivory.Opts.Asserts.VC
   , if'
   , length'
   , isArray
+  , isInt
   , (==.)
   , (<.)
   , (<=.)
@@ -53,6 +54,7 @@ data UniOp
   | Abs
   | Signum
   | IsArray
+  | IsInt
   deriving Eq
 
 data BinOp
@@ -96,6 +98,7 @@ instance Show UniOp where
     Abs     -> "abs"
     Signum  -> "signum"
     IsArray -> "isArray"
+    IsInt   -> "isInt"
 
 instance Show BinOp where
   show a = case a of
@@ -142,6 +145,7 @@ a <=. b = (a <. b) ||. (a ==. b)
 a >=. b = (a >. b) ||. (a ==. b)
 mod' = BinOp Mod
 isArray = UniOp IsArray
+isInt = UniOp IsInt
 
 optimize :: Expr -> Expr
 optimize = optRemoveNullEffect . optConstantProp . optInline . optRemoveNullEffect . optConstantProp
@@ -264,6 +268,8 @@ optConstantProp' env a = case a of
     ArrayAppend _ _ -> Bool True
     ArrayUpdate _ _ _ -> Bool True
     a -> UniOp IsArray a
+
+  UniOp IsInt a -> UniOp IsInt a
 
   BinOp And a b -> case (opt a, opt b) of
     (Bool a, Bool b) -> Bool $ a && b

@@ -17,12 +17,11 @@ import qualified Ivory.Language.Syntax.AST as I
 import Ivory.Compile.ACL2
 import Ivory.Opts.Asserts
 import Ivory.Opts.Index
-import Ivory.Opts.Overflow
 
 main :: IO ()
 main = do
   -- Tests of assertion optimization, i.e. verification and removal of assertions.
-  _ <- assertsFold [Progress, Failure] {-VC, VCOpt, ACL2, ACL2Result] -} $ map optimizeModule
+  _ <- assertsFold [Progress, Failure] {-, VC, VCOpt, ACL2, ACL2Result] -} $ map optimizeModule
     [ package "assertsFoldTest" $ do 
         incl factorial
         incl intrinsicTest
