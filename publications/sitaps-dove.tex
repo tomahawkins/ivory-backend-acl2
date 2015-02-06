@@ -1,0 +1,126 @@
+\documentclass{article}
+
+\begin{document}
+\title{Dove and Ivory: Verifying One DSL with Another}
+\author{Tom Hawkins, Howard Reubenstein, Greg Eakman, BAE Systems Inc.}
+\date{\today}
+\maketitle
+
+\begin{abstract}
+Dove (a \underline{D}SL \underline{O}perational \underline{V}erification \underline{E}nvironment)
+is a language to capture verification conditions (VCs) for the 
+Ivory DSL for verifying user and compiler generated assertions
+and procedure contracts.  VCs from an Ivory program are first
+translated into Dove then into ACL2 for formal analysis.
+Verified assertions and contracts are then optimized out of
+the Ivory program from improved runtime performance.
+This paper provides an overview of the Dove language,
+the VC generation strategy, the translation from Ivory to Dove,
+and from Dove to ACL2.  Verification results are highlighted
+and future extensions discussed.
+\end{abstract}
+
+% http://www.cs.utexas.edu/users/moore/acl2/workshop-2015/index.html
+
+\section{Problem Definition}
+
+Developed under DARPA HACMS, Ivory is a DSL in Haskell for 
+embedded systems programming.  Ivory has C-like semantics with memory
+safety, enforced by an embedded type system.
+To capture design intent (requirements), Ivory allows user specified
+assertions, assumptions, and procedure contracts (i.e. pre and post conditions
+on a function call).  In addition, the Ivory compiler generates
+assertions to guard a program against a host of runtime violations including
+floating point exceptions, numerical overflows, array out-of-bound indexing,
+and unbounded loops.
+
+Verification of these assertions is crucial for two reasons.  First and foremost,
+assertions are still runtime checks, and failure of such are equivalent 
+to uncaught exceptions (think Ariane 5).  For HACMS, this importance cannot
+be underscored, since Ivory code will be flying a real helicopter with an onboard safety pilot.
+Second, runtime checks have
+runtime overhead: if these checks and their associated logic can be safely
+removed, memory consumption and execution time are reduced; important 
+for embedded system, which often run under tight resource constrains.
+
+\subsection{Interprocedural Analysis with Dove}
+TODO
+\begin{itemize}
+  \item Overview of interprocedural (used for scalability): Assume requires and sub-ensures, check sub-requires, ensures, and asserts.
+  \item Describe the iterative VC generation / VC verification process; accumulating lemmas as it goes.
+  \item Punt on recursion: all procedure requires left in place.
+  \item Punt on loops.
+  \item Punt on floating point.
+  \item Punt on stack across procedure calls.
+\end{itemize}
+
+\section{Dove Language}
+TODO
+(Maybe just for the SITAPS report not the paper?)
+\begin{itemize}
+  \item Basic types: booleans, integers
+  \item Aggregate types: arrays, records
+  \item Expressions:
+  \begin{itemize}
+    \item Literals: true, false, 22
+    \item Conditional: if ... then ... else
+    \item Basic operations: logic, arithmetic, comparison
+    \item Array operations: append, project, update
+    \item Record operations: project, overlay
+    \item Variable introduction:
+    \begin{itemize}
+      \item Let a = 22 in ...
+      \item Forall a in ...
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+
+\section{Translating Ivory to Dove}
+TODO
+\begin{itemize}
+  \item Both Ivory and Dove are DSLs embedded in Haskell.  Makes for a clean AST to AST translation.
+  \item Detail how Ivory AST elements are encoded into Dove.
+  \item Comments are good: Ivory AST elements are heavily commented and hierarchically group during translation.
+\end{itemize}
+
+\section{Translating Dove to ACL2}
+TODO
+\subsection{Dove Optimization}
+\subsection{ACL2 Translation}
+
+\section{Practical Verification}
+TODO
+\begin{itemize}
+  \item Attempted to make these industrial ready tools, not just a research project.
+  \item Controlled verbosity.  Output progress, failures, VC, optimized VC, ACL2, ACL2 result.
+\end{itemize}
+
+\section{Results}
+TODO
+\subsection{Results from Testsuite}
+\subsection{Results from Quadcopter Software}
+Testing over (can we get Galois to do anything with this?)
+
+\section{Related and Future Work}
+(For conference paper the related work section will need to be 
+pretty strong -- maybe we can get some additional eyes on this -- 
+of course it may turn out that this work is too similar -- interesting
+but still too similar -- to some already published approach)
+
+Similar systems:
+\begin{itemize}
+  \item Frama-C (Why3)
+  \item Spark Ada
+\end{itemize}
+
+\subsection{Future Work}
+\begin{itemize}
+  \item Address limitations: no floating point, no stack across calls, no loops, bitwise operations.
+  \item Incorporate other backends (SMT, WHY3).
+  \item Target other languages: pointer operations (Cish); Breeze type, contract, and maybe IFC checking; HDLs.
+\end{itemize}
+
+\section{Conclusions}
+
+\end{document}
+
