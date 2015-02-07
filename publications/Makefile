@@ -1,4 +1,8 @@
+.PHONY: all
+all: sitaps-dove.pdf
+
 sitaps-dove.pdf: sitaps-dove.tex
+	pdflatex sitaps-dove.tex
 	pdflatex sitaps-dove.tex
 
 .PHONY: clean

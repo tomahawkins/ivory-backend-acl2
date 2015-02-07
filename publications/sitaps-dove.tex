@@ -1,4 +1,5 @@
 \documentclass{article}
+\usepackage{listings}
 
 \begin{document}
 \title{Dove and Ivory: Verifying One DSL with Another}
@@ -13,7 +14,7 @@ Ivory DSL for verifying user and compiler generated assertions
 and procedure contracts.  VCs from an Ivory program are first
 translated into Dove then into ACL2 for formal analysis.
 Verified assertions and contracts are then optimized out of
-the Ivory program from improved runtime performance.
+the Ivory program for improved runtime performance.
 This paper provides an overview of the Dove language,
 the VC generation strategy, the translation from Ivory to Dove,
 and from Dove to ACL2.  Verification results are highlighted
@@ -25,20 +26,19 @@ and future extensions discussed.
 \section{Problem Definition}
 
 Developed under DARPA HACMS, Ivory is a DSL in Haskell for 
-embedded systems programming.  Ivory has C-like semantics with memory
-safety, enforced by an embedded type system.
-To capture design intent (requirements), Ivory allows user specified
-assertions, assumptions, and procedure contracts (i.e. pre and post conditions
-on a function call).  In addition, the Ivory compiler generates
+embedded programming.  Ivory is similar to C but
+enforces memory safety though its type system.
+To capture design intent, Ivory provides
+assertions, assumptions, and procedure contracts.
+In addition, the Ivory compiler generates
 assertions to guard a program against a host of runtime violations including
-floating point exceptions, numerical overflows, array out-of-bound indexing,
-and unbounded loops.
+floating point exceptions, numerical overflows, and unbounded loops.
 
 Verification of these assertions is crucial for two reasons.  First and foremost,
 assertions are still runtime checks, and failure of such are equivalent 
-to uncaught exceptions (think Ariane 5).  For HACMS, this importance cannot
-be underscored, since Ivory code will be flying a real helicopter with an onboard safety pilot.
-Second, runtime checks have
+to uncaught exceptions (think Ariane 5).  This importance cannot
+be underscored in HACMS, since an Ivory autopilot will be flying a real helicopter
+with an onboard safety pilot.  Second, runtime checks have
 runtime overhead: if these checks and their associated logic can be safely
 removed, memory consumption and execution time are reduced; important 
 for embedded system, which often run under tight resource constrains.
@@ -55,6 +55,85 @@ TODO
 \end{itemize}
 
 \section{Dove Language}
+The Dove language does not have a concrete syntax.  Figure \ref{doveSyntax} lists the various expressions of Dove.
+
+
+\begin{figure}
+  \caption{Dove Syntax}
+  \label{doveSyntax}
+  \begin{lstlisting}
+data Expr
+  -- Variable reference.
+  = Var           String
+
+  -- Literals.
+  | Unit
+  | Bool          Bool
+  | Integer       Integer
+
+  -- Introduce a variable bound to an expression.
+  | Let           String Expr Expr
+
+  -- Introduce a universally quantified variable.
+  | ForAll        String Expr
+
+  -- Conditional, uniary, and binary operations.
+  | If            Expr Expr Expr
+  | UniOp         UniOp Expr
+  | BinOp         BinOp Expr Expr
+
+  -- Array construction.
+  | Array         [Expr]
+
+  -- Array appending.
+  | ArrayAppend   Expr Expr
+
+  -- Array projecting (array, index).
+  | ArrayProject  Expr Expr
+
+  -- Updating an array with an index and a new value (index, value, oldArray).
+  | ArrayUpdate   Expr Expr Expr
+
+  -- Record construction.
+  | Record        [(String, Expr)]
+
+  -- Record projection.
+  | RecordProject Expr String
+
+  -- Create a new record by overlaying one record over another.
+  | RecordOverlay Expr Expr
+
+  -- Comments for annotation.
+  | Comment       String Expr
+  \end{lstlisting}
+\end{figure}
+
+\begin{figure}
+  \caption{Dove Uniary and Binary Operators}
+  \label{doveOperators}
+  \begin{lstlisting}
+data UniOp
+  = Not      -- Boolean negation.
+  | Length   -- Length of an array.
+  | Negate   -- Integer negation.
+  | Abs      -- Absolute value.
+  | IsArray  -- Array type predicate.
+  | IsInt    -- Integer type predicate.
+
+data BinOp
+  = And      -- Boolean AND.
+  | Or       -- Boolean OR.
+  | Implies  -- Boolean implication.
+  | Eq       -- Equal comparison.
+  | Lt       -- Less than comparison.
+  | Gt       -- Greater than comparison.
+  | Add      -- Integer addition.
+  | Sub      -- Integer subtraction.
+  | Mul      -- Integer multiplication.
+  | Mod      -- Integer modulo.
+  \end{lstlisting}
+\end{figure}
+
 TODO
 (Maybe just for the SITAPS report not the paper?)
 \begin{itemize}
