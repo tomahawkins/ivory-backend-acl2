@@ -18,6 +18,8 @@ import Ivory.Compile.ACL2
 import Ivory.Opts.Asserts
 import Ivory.Opts.Index
 
+import RingBuffer
+
 main :: IO ()
 main = do
   -- Tests of assertion optimization, i.e. verification and removal of assertions.

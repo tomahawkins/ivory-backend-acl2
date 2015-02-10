@@ -11,13 +11,13 @@
 Dove (a \underline{D}SL \underline{O}perational \underline{V}erification \underline{E}nvironment)
 is a language to capture verification conditions (VCs) for the 
 Ivory DSL for verifying user and compiler generated assertions
-and procedure contracts.  VCs from an Ivory program are first
+and procedure contracts.  VCs from an Ivory program are
 translated into Dove then into ACL2 for formal analysis.
 Verified assertions and contracts are then optimized out of
 the Ivory program for improved runtime performance.
 This paper provides an overview of the Dove language,
-the VC generation strategy, the translation from Ivory to Dove,
-and from Dove to ACL2.  Verification results are highlighted
+the VC generation strategy, the translation from Ivory to Dove
+and Dove to ACL2.  Verification results are highlighted
 and future extensions discussed.
 \end{abstract}
 
@@ -26,37 +26,74 @@ and future extensions discussed.
 \section{Problem Definition}
 
 Developed under DARPA HACMS, Ivory is a DSL in Haskell for 
-embedded programming.  Ivory is similar to C but
-enforces memory safety though its type system.
-To capture design intent, Ivory provides
+embedded programming.  Ivory is similar to C and provides
+memory safety, enforced by its type system.
+To capture design intent, Ivory has
 assertions, assumptions, and procedure contracts.
 In addition, the Ivory compiler generates
 assertions to guard a program against a host of runtime violations including
-floating point exceptions, numerical overflows, and unbounded loops.
+floating point exceptions, numerical overflows, index casting, and unbounded loops.
 
-Verification of these assertions is crucial for two reasons.  First and foremost,
+Verification of these assertions are crucial for two reasons.  First and foremost,
 assertions are still runtime checks, and failure of such are equivalent 
 to uncaught exceptions (think Ariane 5).  This importance cannot
 be underscored in HACMS, since an Ivory autopilot will be flying a real helicopter
 with an onboard safety pilot.  Second, runtime checks have
 runtime overhead: if these checks and their associated logic can be safely
 removed, memory consumption and execution time are reduced; important 
-for embedded system, which often run under tight resource constrains.
+for embedded systems, which often run under tight resource constrains.
 
-\subsection{Interprocedural Analysis with Dove}
-TODO
-\begin{itemize}
-  \item Overview of interprocedural (used for scalability): Assume requires and sub-ensures, check sub-requires, ensures, and asserts.
-  \item Describe the iterative VC generation / VC verification process; accumulating lemmas as it goes.
-  \item Punt on recursion: all procedure requires left in place.
-  \item Punt on loops.
-  \item Punt on floating point.
-  \item Punt on stack across procedure calls.
-\end{itemize}
+To address both of these concerns and tackle the problem of Ivory program
+verification, we created Dove (a \underline{D}SL \underline{O}perational \underline{V}erification \underline{E}nvironment)
+as both a language and a verification environment.  Like Ivory,
+Dove is a DSL embedded in Haskell.  The Dove library provides all the 
+constructs for the language as well as the VC generator, the Dove optimizer,
+and the interface to the backend prover, ACL2.
 
-\section{Dove Language}
-The Dove language does not have a concrete syntax.  Figure \ref{doveSyntax} lists the various expressions of Dove.
+What follows is an overview of the Dove verification strategy,
+an overview of the Dove language, a detailed look at the translation from
+Ivory into Dove, and then how Dove is translated to ACL2.
+We conclude with results (verification performance) of various tests,
+provide a comparison between Dove and other similar systems,
+and discuss possible future extensions
+to the Dove language and verifier and using Dove to target other programming
+languages and paradigms.
 
+\subsection{Interprocedural Verification and Runtime Check Optimization with Dove}
+
+In Dove, Ivory program verification is taken one procedure at a time.
+Starting at a procedure's arguments, the Dove verifier traverses
+the procedure's body generating VCs for assertions and post-conditions along the way.
+To optimize-out proven checks, the verifier maintains a working copy of the procedure's AST.
+When an assertion or post-condition check is verified, the runtime check is removed.
+After verification, the modified AST is passed to a conventional optimizer and code generator.
+
+During the traversal, the verifier accumulates a database of lemmas
+to aid the verification of future checks in a procedure.
+These include pre-conditions ({\tt requires}) on arguments
+and any prior check performed on a given branch, regardless of whether the check was verified.
+Checks that fail to prove remain in the generated code
+as do procedure pre-conditions; the later to avoid potential issues with
+recursive procedures.
+
+To help scale to global program verification,
+procedure calls are abstracted with the callee's procedure contracts.
+Specifically, the callee's pre-conditions ({\tt requires}) are asserted
+and the post-conditions ({\tt ensures}) are added to the lemma database.
+
+\section{The Dove Language}
+Because Dove is an intermediate language, it currently lacks a
+formally defined concrete syntax.  So what follows in
+figure \ref{doveSyntax} and \ref{doveOperators} shows
+the abstract syntax of the Dove language in the form of 
+Haskell datatypes.
+
+Dove provides three basic types (unit, booleans, and integers)
+and two composite types (arrays and records).
+New variables are introduced with non-recursive let-binding
+or by universal quantification (aka. free varaibles).
+
+Dove intentionally lacks functions and existential quantifiers.
 
 \begin{figure}
   \caption{Dove Syntax}
@@ -77,7 +114,7 @@ data Expr
   -- Introduce a universally quantified variable.
   | ForAll        String Expr
 
-  -- Conditional, uniary, and binary operations.
+  -- Conditional, unary, and binary operations.
   | If            Expr Expr Expr
   | UniOp         UniOp Expr
   | BinOp         BinOp Expr Expr
@@ -94,10 +131,10 @@ data Expr
   -- Updating an array with an index and a new value (index, value, oldArray).
   | ArrayUpdate   Expr Expr Expr
 
-  -- Record construction.
+  -- Record construction (field name, value).
   | Record        [(String, Expr)]
 
-  -- Record projection.
+  -- Record projection (record, field name).
   | RecordProject Expr String
 
   -- Create a new record by overlaying one record over another.
@@ -134,32 +171,19 @@ data BinOp
   \end{lstlisting}
 \end{figure}
 
-TODO
-(Maybe just for the SITAPS report not the paper?)
-\begin{itemize}
-  \item Basic types: booleans, integers
-  \item Aggregate types: arrays, records
-  \item Expressions:
-  \begin{itemize}
-    \item Literals: true, false, 22
-    \item Conditional: if ... then ... else
-    \item Basic operations: logic, arithmetic, comparison
-    \item Array operations: append, project, update
-    \item Record operations: project, overlay
-    \item Variable introduction:
-    \begin{itemize}
-      \item Let a = 22 in ...
-      \item Forall a in ...
-    \end{itemize}
-  \end{itemize}
-\end{itemize}
-
 \section{Translating Ivory to Dove}
 TODO
 \begin{itemize}
   \item Both Ivory and Dove are DSLs embedded in Haskell.  Makes for a clean AST to AST translation.
   \item Detail how Ivory AST elements are encoded into Dove.
   \item Comments are good: Ivory AST elements are heavily commented and hierarchically group during translation.
+  \item Areas of Ivory language not supported or handled conservatively:
+  \begin{itemize}
+    \item Recursion: all procedure requires left in place.
+    \item Loops.
+    \item Floating point: all FP operations are taken a free variables.
+    \item Stack is not maintained across procedure calls.
+  \end{itemize}
 \end{itemize}
 
 \section{Translating Dove to ACL2}
@@ -170,7 +194,7 @@ TODO
 \section{Practical Verification}
 TODO
 \begin{itemize}
-  \item Attempted to make these industrial ready tools, not just a research project.
+  \item An attempt to make these tools industrial ready, not just a research project.
   \item Controlled verbosity.  Output progress, failures, VC, optimized VC, ACL2, ACL2 result.
 \end{itemize}
 
