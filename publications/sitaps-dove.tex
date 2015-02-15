@@ -1,5 +1,6 @@
 \documentclass{article}
 \usepackage{listings}
+\usepackage{syntax}
 
 \begin{document}
 \title{Dove and Ivory: Verifying One DSL with Another}
@@ -81,149 +82,316 @@ procedure calls are abstracted with the callee's procedure contracts.
 Specifically, the callee's pre-conditions ({\tt requires}) are asserted
 and the post-conditions ({\tt ensures}) are added to the lemma database.
 
-\section{The Dove Language}
-Because Dove is an intermediate language, it currently lacks a
-formally defined concrete syntax.  So what follows in
-figure \ref{doveSyntax} and \ref{doveOperators} shows
-the abstract syntax of the Dove language in the form of 
-Haskell datatypes.
+\section{Dove Language Syntax}
 
-Dove provides three basic types (unit, booleans, and integers)
-and two composite types (arrays and records).
-New variables are introduced with non-recursive let-binding
-or by universal quantification (aka. free varaibles).
+Dove is a declarative language with out side effects.  A Dove
+program only contains expressions, no statements.
+Dove has three basic types: unit, booleans, and integers;
+and provides literal expressions to introduce values
+of these types:
+\setlength{\grammarindent}{10em}
+\begin{grammar}
+  <expr> ::= `()' | <boolean-literal> | <integer-literal>
 
-Dove intentionally lacks functions and existential quantifiers.
+  <boolean-literal> ::= true | false
+\end{grammar}
 
-\begin{figure}
-  \caption{Dove Syntax}
-  \label{doveSyntax}
-  \begin{lstlisting}
-data Expr
-  -- Variable reference.
-  = Var           String
+Variables can be introduced into scope either by a non-recursive \texttt{let}
+binding or by the universal quantifier:
 
-  -- Literals.
-  | Unit
-  | Bool          Bool
-  | Integer       Integer
+\begin{grammar}
+  <expr> ::= let <variable> = <expr> in <expr>
+    \alt forall <variable> in <expr>
+\end{grammar}
 
-  -- Introduce a variable bound to an expression.
-  | Let           String Expr Expr
+Of course, variables themselves are expressions:
 
-  -- Introduce a universally quantified variable.
-  | ForAll        String Expr
+\begin{grammar}
+  <expr> ::= <variable>
+\end{grammar}
 
-  -- Conditional, unary, and binary operations.
-  | If            Expr Expr Expr
-  | UniOp         UniOp Expr
-  | BinOp         BinOp Expr Expr
+To build up larger data structures, Dove has two composite types: arrays and records.
+Arrays can be constructed from a list of expressions, arrays can be appended
+together, arrays can be indexed (i.e. array projection), and arrays can be 
+updated given an index, a value, and a base array:
 
-  -- Array construction.
-  | Array         [Expr]
+\begin{grammar}
+  <expr> ::= `[' <expr> \{ , <expr> \} `]'
+    \alt <expr> ++ <expr>
+    \alt <expr> `[' <expr> `]'
+    \alt `(' update <expr> <expr> <expr> `)'
+\end{grammar}
 
-  -- Array appending.
-  | ArrayAppend   Expr Expr
+Likewise, records can be contructed from a list of name-value pairs,
+records can be indexed given a record and a field name, and two
+records can be overlayed, one over the other, the first overwriting
+any fields that are common in the second:
 
-  -- Array projecting (array, index).
-  | ArrayProject  Expr Expr
+\begin{grammar}
+  <expr> ::= `\{' <field-name> = <expr> \{ , <field-name> = <expr> \} `\}'
+    \alt <expr> . <field-name>
+    \alt `(' overlay <expr> <expr> `)'
+\end{grammar}
 
-  -- Updating an array with an index and a new value (index, value, oldArray).
-  | ArrayUpdate   Expr Expr Expr
+Also, Dove has a conditional expression and a handful of unary and binary operators:
 
-  -- Record construction (field name, value).
-  | Record        [(String, Expr)]
+\begin{grammar}
+  <expr> ::= if <expr> then <expr> else <expr>
+    \alt `(' <unary-operator> <expr> `)'
+    \alt `(' <binary-operator> <expr> <expr> `)'
 
-  -- Record projection (record, field name).
-  | RecordProject Expr String
+  <unary-operator> ::= not
+    \alt isUnit
+    \alt isBool
+    \alt isInt
+    \alt isArray
+    \alt isRecord
+    \alt arrayLength
+    \alt intNegate 
+    \alt intAbs
 
-  -- Create a new record by overlaying one record over another.
-  | RecordOverlay Expr Expr
+  <binary-operators> ::= and
+    \alt or
+    \alt implies
+    \alt eq
+    \alt lt
+    \alt gt
+    \alt +
+    \alt -
+    \alt *
+    \alt mod
+\end{grammar}
 
-  -- Comments for annotation.
-  | Comment       String Expr
-  \end{lstlisting}
-\end{figure}
+\section{Translating Ivory to Dove VCs}
 
-\begin{figure}
-  \caption{Dove Uniary and Binary Operators}
-  \label{doveOperators}
-  \begin{lstlisting}
-data UniOp
-  = Not      -- Boolean negation.
-  | Length   -- Length of an array.
-  | Negate   -- Integer negation.
-  | Abs      -- Absolute value.
-  | IsArray  -- Array type predicate.
-  | IsInt    -- Integer type predicate.
+Before we give a detailed account of the translation process, it helps to see an 
+example of how a small Ivory procedure is translated into the various VCs in Dove.
 
-data BinOp
-  = And      -- Boolean AND.
-  | Or       -- Boolean OR.
-  | Implies  -- Boolean implication.
-  | Eq       -- Equal comparison.
-  | Lt       -- Less than comparison.
-  | Gt       -- Greater than comparison.
-  | Add      -- Integer addition.
-  | Sub      -- Integer subtraction.
-  | Mul      -- Integer multiplication.
-  | Mod      -- Integer modulo.
-  \end{lstlisting}
-\end{figure}
+TODO: Ivory to Dove example with factorial, or similar.
 
-\section{Translating Ivory to Dove}
-TODO
-\begin{itemize}
-  \item Both Ivory and Dove are DSLs embedded in Haskell.  Makes for a clean AST to AST translation.
-  \item Detail how Ivory AST elements are encoded into Dove.
-  \item Comments are good: Ivory AST elements are heavily commented and hierarchically group during translation.
-  \item Areas of Ivory language not supported or handled conservatively:
-  \begin{itemize}
-    \item Recursion: all procedure requires left in place.
-    \item Loops.
-    \item Floating point: all FP operations are taken a free variables.
-    \item Stack is not maintained across procedure calls.
-  \end{itemize}
-\end{itemize}
+
+\section{Underlying Verification Infrastructure}
+
+The verification and optimization traversal
+of an Ivory procedure happens in a StateT monad called \texttt{IVO}
+(for \underline{I}vory \underline{V}erification and \underline{O}ptimization).
+Not only does this monad translate Ivory into Dove, it also performs the Dove to ACL2
+translation and makes calls to ACL2 to verify the VCs as they are generated.
+The state maintained by \texttt{IVO} holds
+counters for Dove variable generation\footnote{For improved legibility of the generted VCs,
+dove generates distinct variable names
+for VCs, assumed conditions, branch conditions, free variables,
+environments, and stacks.},
+the Dove representation of the Ivory procedure thus far,
+the currrent branch,
+a list of accumulated lemmas,
+the current environment and stack, and an accumlation
+of encountered return points.
+The \texttt{IVO} monad allows us to write
+succint transformers (Ivory to Ivory) and translators (Ivory to Dove),
+including:
+
+\begin{lstlisting}
+  -- Rewrite Ivory statement blocks.
+  block :: I.Block -> IVO I.Block
+  
+  -- Rewrite Ivory statements.
+  stmt :: I.Stmt -> IVO I.Stmt
+  
+  -- Convert an Ivory expression to a Dove expression.
+  expr :: I.Expr -> IVO Expr
+  
+  -- Convert Ivory operators to Dove expressions.
+  intrinsic :: I.ExpOp -> [Expr] -> IVO Expr
+\end{lstlisting}
+
+Another benefit of this monadic approach is that it
+eases the construction of a set of reusable verification combinators,
+such as for variable name generation and inserting code annotations, 
+some of which are shown below:
+
+\begin{lstlisting}
+  -- Define a new branching condition (BC).
+  newBC :: I.Expr -> IVO Expr
+  
+  -- Create a new free variable.
+  newFree :: IVO Expr
+  
+  -- Add new procedure body logic.
+  addBody :: (Expr -> Expr) -> IVO ()
+  
+  -- Insert a comment.
+  comment :: String -> IVO ()
+  
+  -- Insert a nested comment.
+  comment' :: String -> IVO a -> IVO a
+  
+  -- Add a return expression.
+  addReturn :: Expr -> IVO ()
+  
+  -- Get all the return expressions in the procedure.
+  getReturns :: IVO [Expr]
+\end{lstlisting}
+
+Since environments and stacks play an important role
+in capturing the semantics of Ivory programs, 
+a subset of these combinators is dedicated their
+management:
+
+\begin{lstlisting}
+  -- Given a record expression representing an environment, create
+  -- a new environment variable and set it as the current environment.
+  newEnv :: Expr -> IVO ()
+  
+  -- Get the current environment.
+  getEnv :: IVO Expr
+  
+  -- Set the current environment.
+  setEnv :: Expr -> IVO ()
+  
+  -- With the current environment, do something in IVO then restore
+  -- the environment on the return.
+  withEnv :: IVO a -> IVO a
+  
+  -- Extend the current environment with a name and a value.
+  extendEnv :: String -> Expr -> IVO ()
+  
+  -- Lookup a name in the current environment.
+  lookupEnv :: String -> IVO Expr
+
+  -- Given a stack expression, create a new stack variable
+  -- and set it as the current stack.
+  newStack :: Expr -> IVO ()
+  
+  -- Get the current stack.
+  getStack :: IVO Expr
+  
+  -- Extends the stack with a value and returns the
+  -- pointer (index) to the stack location.
+  extendStack :: Expr -> IVO Expr
+  
+  -- Update the current stack given an index and value.
+  updateStack :: Expr -> Expr -> IVO ()
+  
+  -- Given an index, dereference the assocated value on the stack.
+  lookupStack :: Expr -> IVO Expr
+  
+  -- Create a new stack of free variables, but keeps
+  -- the stack size the same.
+  freeStack :: IVO ()
+\end{lstlisting}
+
+With these basic combinators in place, translating many Ivory
+constructs is just a matter of composing these combinators.
+For example, an Ivory dereference (\texttt{I.Deref t v r})
+has a type (\texttt{t}), the variable introduced that
+will hold the dereferenced value (\texttt{v}), and
+the reference expression (\texttt{r}).  The translation
+process entails these steps:
+
+\begin{enumerate}
+  \item Translate the reference expression into Dove.
+  \item Use the reference to lookup the value on the stack.
+  \item Extend the current environment by binding the referenced
+        stack value to the variable \texttt{v}.
+\end{enumerate}
+
+With our verification combinators in \texttt{IVO}, these
+three steps are a one-liner Haskell:
+
+\begin{lstlisting}
+    I.Deref _ v r -> expr r >>= lookupStack >>= extendEnv (var v)
+\end{lstlisting}
+
+Likewise, Ivory's stack allocation statement (\texttt{I.allocRef t r v})
+is translated by:
+
+\begin{enumerate}
+  \item Lookup the variable \texttt{v} in the current environment.
+  \item Extend the stack with the value of the variable \texttt{v}.
+  \item Extend the environment with the variable \texttt{r} as the reference to the new stack allocation.
+\end{enumerate}
+
+Again, these operations are performed in a single line of Haskell:
+
+\begin{lstlisting}
+  I.AllocRef _ r v -> lookupEnv (var v) >>= extendStack >>= extendEnv (var r)
+\end{lstlisting}
+
+
+%TODO
+%\begin{itemize}
+%  \item Both Ivory and Dove are DSLs embedded in Haskell.  Makes for a clean AST to AST translation.
+%  \item Describe verifier monad: captures lemma database, AST transformations.
+%  \item Detail how Ivory AST elements are encoded into Dove.
+%  \item Comments are good: Ivory AST elements are heavily commented and hierarchically group during translation.
+%  \item Areas of Ivory language not supported or handled conservatively:
+%  \begin{itemize}
+%    \item Recursion: all procedure requires left in place.
+%    \item Loops.
+%    \item Floating point: all FP operations are taken a free variables.
+%    \item Stack is not maintained across procedure calls.
+%  \end{itemize}
+%\end{itemize}
 
 \section{Translating Dove to ACL2}
 TODO
-\subsection{Dove Optimization}
-\subsection{ACL2 Translation}
+\begin{itemize}
+  \item Dove optimization.
+  \item Mention ACL2 DSL.
+  \item ACL2 translation.  Discuss handling of global storage and stack.
+\end{itemize}
 
 \section{Practical Verification}
 TODO
 \begin{itemize}
-  \item An attempt to make these tools industrial ready, not just a research project.
+  \item An attempt to make these tools user friendly to designers/verification engineers.
   \item Controlled verbosity.  Output progress, failures, VC, optimized VC, ACL2, ACL2 result.
 \end{itemize}
 
 \section{Results}
 TODO
-\subsection{Results from Testsuite}
-\subsection{Results from Quadcopter Software}
-Testing over (can we get Galois to do anything with this?)
+\begin{itemize}
+  \item Results from testsuite.
+  \item Results from Galois: quadcopter or Boeing littler bird?  Probably not likely.  Maybe can add/adapt ivory-model-checking examples.
+\end{itemize}
 
-\section{Related and Future Work}
+\section{Survey of Similar Verification Systems}
+TODO
 (For conference paper the related work section will need to be 
 pretty strong -- maybe we can get some additional eyes on this -- 
 of course it may turn out that this work is too similar -- interesting
 but still too similar -- to some already published approach)
-
-Similar systems:
 \begin{itemize}
   \item Frama-C (Why3)
   \item Spark Ada
 \end{itemize}
 
-\subsection{Future Work}
+\section{Future Work}
+TODO
 \begin{itemize}
   \item Address limitations: no floating point, no stack across calls, no loops, bitwise operations.
   \item Incorporate other backends (SMT, WHY3).
   \item Target other languages: pointer operations (Cish); Breeze type, contract, and maybe IFC checking; HDLs.
+  \begin{itemize}
+    \item Pointer operation is C-like language.
+    \item Breeze type checking, contract checking, and maybe IFC checking.
+    \item Hardware description languages for FPGA design.
+    \item Integrity verification in presents of bit corruption, e.g. formalizing fault simulation in PERFECT.
+  \end{itemize}
 \end{itemize}
 
 \section{Conclusions}
+We presented an overview of the Dove language and verification environment
+and how it is applied to Ivory programs,
+specifically the verification and optimization of runtime checks.
+
+TODO
+\begin{itemize}
+  \item About 75\% success rate on testsuite.
+  \item Fast execution.  Provide numbers.
+  \item Primary limitations include loops, stack across calls, floating point.  Stack problems can be address with a better contract language.
+\end{itemize}
 
 \end{document}
 
