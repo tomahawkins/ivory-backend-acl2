@@ -63,7 +63,9 @@ data BinOp
   | Implies
   | Eq
   | Lt
+  | Le
   | Gt
+  | Ge
   | Add
   | Sub
   | Mul
@@ -74,7 +76,7 @@ instance Show Expr where
   show a = case a of
     Var           a     -> a
     ForAll        a b   -> printf "forall %s in\n%s" a (show b)
-    Record        a     -> printf "{%s}" $ intercalate ", " [ a ++ " : " ++ show b | (a, b) <- a ]
+    Record        a     -> printf "{%s}" $ intercalate ", " [ a ++ " = " ++ show b | (a, b) <- a ]
     RecordOverlay a b   -> printf "(overlay %s %s)" (show a) (show b)
     RecordProject a b   -> printf "%s.%s" (show a) b
     Array         a     -> printf "[%s]" $ intercalate ", " $ map show a
@@ -92,26 +94,28 @@ instance Show Expr where
 
 instance Show UniOp where
   show a = case a of
-    Not     -> "!"
-    Length  -> "length"
-    Negate  -> "negate"
-    Abs     -> "abs"
-    Signum  -> "signum"
+    Not     -> "not"
+    Length  -> "arrayLength"
+    Negate  -> "intNegate"
+    Abs     -> "intAbs"
+    Signum  -> "intSignum"
     IsArray -> "isArray"
     IsInt   -> "isInt"
 
 instance Show BinOp where
   show a = case a of
-    And     -> "&&"
-    Or      -> "||"
-    Implies -> "->"
-    Eq      -> "=="
-    Lt      -> "<"
-    Gt      -> ">"
+    And     -> "and"
+    Or      -> "or"
+    Implies -> "implies"
+    Eq      -> "eq"
+    Lt      -> "lt"
+    Le      -> "le"
+    Gt      -> "gt"
+    Ge      -> "ge"
     Add     -> "+"
     Sub     -> "-"
     Mul     -> "*"
-    Mod     -> "%"
+    Mod     -> "mod"
 
 instance Num Expr where
   (+)    = BinOp Add
@@ -139,10 +143,10 @@ false = Bool False
 if' = If
 length' = UniOp Length
 (==.) = BinOp Eq
-(<.) = BinOp Lt
-a <=. b = (a <. b) ||. (a ==. b)
-(>.) = BinOp Gt
-a >=. b = (a >. b) ||. (a ==. b)
+(<.)  = BinOp Lt
+(<=.) = BinOp Le
+(>.)  = BinOp Gt
+(>=.) = BinOp Ge
 mod' = BinOp Mod
 isArray = UniOp IsArray
 isInt = UniOp IsInt
@@ -269,7 +273,16 @@ optConstantProp' env a = case a of
     ArrayUpdate _ _ _ -> Bool True
     a -> UniOp IsArray a
 
-  UniOp IsInt a -> UniOp IsInt a
+  UniOp IsInt a -> case opt a of
+    Integer _ -> Bool True
+    Unit      -> Bool False
+    Bool    _ -> Bool False
+    Record        _     -> Bool False
+    RecordOverlay _ _   -> Bool False
+    Array         _     -> Bool False
+    ArrayAppend   _ _   -> Bool False
+    ArrayUpdate   _ _ _ -> Bool False
+    a -> UniOp IsInt a
 
   BinOp And a b -> case (opt a, opt b) of
     (Bool a, Bool b) -> Bool $ a && b
@@ -317,11 +330,23 @@ optConstantProp' env a = case a of
       | a == b -> false
       | otherwise -> BinOp Lt a b
 
+  BinOp Le a b -> case (opt a, opt b) of
+    (Integer a, Integer b) -> Bool $ a <= b
+    (a, b)
+      | a == b -> false
+      | otherwise -> BinOp Le a b
+
   BinOp Gt a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Bool $ a > b
     (a, b)
       | a == b -> false
       | otherwise -> BinOp Gt a b
+
+  BinOp Ge a b -> case (opt a, opt b) of
+    (Integer a, Integer b) -> Bool $ a >= b
+    (a, b)
+      | a == b -> false
+      | otherwise -> BinOp Ge a b
 
   BinOp Add a b -> case (opt a, opt b) of
     (Integer a, Integer b) -> Integer $ a + b

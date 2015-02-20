@@ -122,9 +122,9 @@ updated given an index, a value, and a base array:
     \alt `(' update <expr> <expr> <expr> `)'
 \end{grammar}
 
-Likewise, records can be contructed from a list of name-value pairs,
+Likewise, records can be constructed from a list of name-value pairs,
 records can be indexed given a record and a field name, and two
-records can be overlayed, one over the other, the first overwriting
+records can be overlaid, one over the other, the first overwriting
 any fields that are common in the second:
 
 \begin{grammar}
@@ -138,7 +138,7 @@ Also, Dove has a conditional expression and a handful of unary and binary operat
 \begin{grammar}
   <expr> ::= if <expr> then <expr> else <expr>
     \alt `(' <unary-operator> <expr> `)'
-    \alt `(' <binary-operator> <expr> <expr> `)'
+    \alt `(' <expr> <binary-operator> <expr> `)'
 
   <unary-operator> ::= not
     \alt isUnit
@@ -165,10 +165,145 @@ Also, Dove has a conditional expression and a handful of unary and binary operat
 \section{Translating Ivory to Dove VCs}
 
 Before we give a detailed account of the translation process, it helps to see an 
-example of how a small Ivory procedure is translated into the various VCs in Dove.
+example of how an Ivory procedure is translated into Dove VCs.
+We assume we have a system that
+controls two software actuated valves: valve A and valve B.
+The system has a safety property that states the two valves cannot be open
+at the same time.  The Ivory function (\texttt{openValveA})
+shown in figure \ref{fig:openValveA} commands valve A open.
+As inputs,
+it takes two references that represents the states of valve A and B.
+To adhear to the safety property, a pre-condition on \texttt{openValveA}
+requires that valve B must first be closed.  Also, the post-conditions state
+that \texttt{openValveA} will result in valve A being open and valve B remaining closed.
+An addition pre-condition is need to ensure that the two state references
+are different.
+If they were the same, the function would result in both valves being open,
+which would fail the post-condition requirement.
 
-TODO: Ivory to Dove example with factorial, or similar.
+In this example, the first VC checked is the first post-condition
+of \texttt{openValveA}.  Figure \ref{fig:openValveAVC1} shows this VC
+translated to Dove.
+Prior to translating to ACL2, Dove optimizes the VC
+to that shown in figure \ref{fig:openValveAVC1Opt}.
+At this point, Dove is then translated to ACL2 as
+show in figure \ref{fig:openValveAVC1ACL2}.
 
+\begin{figure} 
+  \caption{Ivory Function \texttt{openValveA}}
+  \label{fig:openValveA}
+  \begin{lstlisting}
+-- Command valve A open.
+openValveA :: Def ('[Ref s (Stored IBool), Ref s (Stored IBool)] :-> ())
+openValveA = proc "openValveA" $ \ valveOpenA valveOpenB ->
+
+  -- Require that valve B must first be closed.
+  requires (checkStored valveOpenB $ iNot) $
+
+  -- Require that valveOpenA and valveOpenB are different references.
+  requires (checkStored valveOpenA $ \ a ->
+            checkStored valveOpenB $ \ b -> a /=? b) $
+
+  -- Ensures that valve A is opened.
+  ensures (const $ checkStored valveOpenA id) $
+
+  -- Ensures that valve B remains closed.
+  ensures (const $ checkStored valveOpenB iNot) $
+
+  body $ do
+    -- Open valve A.
+    store valveOpenA true
+    retVoid
+  \end{lstlisting}
+\end{figure}
+
+\begin{figure}
+  \caption{Dove VC for First Post-Condition of \texttt{openValveA}}
+  \label{fig:openValveAVC1}
+  \begin{lstlisting}
+-- Create the initial stack.
+forall free0 in
+let stack0 = free0 in
+
+-- Assume the initial stack is an array type.
+let assume0 = (true implies (isArray stack0)) in
+
+-- Create the initial environment from the procedure arguments (the two refs).
+forall free1 in
+forall free2 in
+let env0 = {var0 = free1, var1 = free2} in
+
+-- Assume the two arguments are references, i.e. they are
+-- integer types and they are within the bounds of the stack.
+let assume1 = (true implies (isInt env0.var0)) in
+let assume2 = (true implies (env0.var0 ge 0)) in
+let assume3 = (true implies (env0.var0 lt (arrayLength stack0))) in
+let assume4 = (true implies (isInt env0.var1)) in
+let assume5 = (true implies (env0.var1 ge 0)) in
+let assume6 = (true implies (env0.var1 lt (arrayLength stack0))) in
+
+-- Assume the first pre-condition, i.e. valve B is closed.
+let env1 = (overlay {pre0 = stack0[env0.var1]} env0) in
+let assume7 = (true implies (not env1.pre0)) in
+
+-- Assume the second pre-condition, i.e. valve A and B are
+-- different references.
+let env2 = (overlay {pre1 = stack0[env1.var0]} env1) in
+let env3 = (overlay {pre2 = stack0[env2.var1]} env2) in
+let assume8 = (true implies (not (env3.pre1 eq env3.pre2))) in
+
+-- Update the valve A state, i.e. set it to open (true).
+let stack1 = (update env3.var0 true stack0) in
+
+-- Define the first VC, i.e. that valve A is open.
+let env4 = (overlay {pre3 = stack1[env3.var0]} env3) in
+let vc0 = (true implies env4.pre3) in
+
+-- Construct the final check with all the assumptions included.
+((((((((((true and assume0) and assume1) and assume2) and assume3)
+               and assume4) and assume5) and assume6) and assume7)
+               and assume8)
+          implies vc0)
+  \end{lstlisting}
+\end{figure}
+
+\begin{figure}
+  \caption{Optimzed Dove VC}
+  \label{fig:openValveAVC1Opt}
+  \begin{lstlisting}
+forall free0 in
+forall free1 in
+forall free2 in
+((((((((((isArray free0) and (isInt free1)) and (free1 ge 0))
+  and (free1 lt (arrayLength free0))) and (isInt free2))
+  and (free2 ge 0)) and (free2 lt (arrayLength free0)))
+  and (not free0[free2])) and (not (free0[free1] eq free0[free2])))
+  implies (update free1 true free0)[free1])
+  \end{lstlisting}
+\end{figure}
+
+\begin{figure}
+  \caption{Optimzed Dove VC Translated to ACL2}
+  \label{fig:openValveAVC1ACL2}
+  \begin{lstlisting}
+( thm
+  ( implies
+    ( and
+      ( consp free0)
+      ( integerp free1)
+      ( >= free1 0)
+      ( < free1 ( len free0))
+      ( integerp free2)
+      ( >= free2 0)
+      ( < free2 ( len free0))
+      ( not ( nth free2 free0))
+      ( not ( equal ( nth free1 free0) ( nth free2 free0)))
+    )
+    ( nth free1 ( update-nth free1 t free0))
+  )
+)
+  \end{lstlisting}
+\end{figure}
 
 \section{Underlying Verification Infrastructure}
 
@@ -178,17 +313,17 @@ of an Ivory procedure happens in a StateT monad called \texttt{IVO}
 Not only does this monad translate Ivory into Dove, it also performs the Dove to ACL2
 translation and makes calls to ACL2 to verify the VCs as they are generated.
 The state maintained by \texttt{IVO} holds
-counters for Dove variable generation\footnote{For improved legibility of the generted VCs,
+counters for Dove variable generation\footnote{For improved legibility of the generated VCs,
 dove generates distinct variable names
 for VCs, assumed conditions, branch conditions, free variables,
 environments, and stacks.},
 the Dove representation of the Ivory procedure thus far,
-the currrent branch,
+the current branch,
 a list of accumulated lemmas,
-the current environment and stack, and an accumlation
+the current environment and stack, and an accumulation
 of encountered return points.
 The \texttt{IVO} monad allows us to write
-succint transformers (Ivory to Ivory) and translators (Ivory to Dove),
+succinct transformers (Ivory to Ivory) and translators (Ivory to Dove),
 including:
 
 \begin{lstlisting}
@@ -256,7 +391,7 @@ management:
   -- Extend the current environment with a name and a value.
   extendEnv :: String -> Expr -> IVO ()
   
-  -- Lookup a name in the current environment.
+  -- Look up a name in the current environment.
   lookupEnv :: String -> IVO Expr
 
   -- Given a stack expression, create a new stack variable
@@ -273,7 +408,7 @@ management:
   -- Update the current stack given an index and value.
   updateStack :: Expr -> Expr -> IVO ()
   
-  -- Given an index, dereference the assocated value on the stack.
+  -- Given an index, dereference the associated value on the stack.
   lookupStack :: Expr -> IVO Expr
   
   -- Create a new stack of free variables, but keeps
@@ -307,7 +442,7 @@ Likewise, Ivory's stack allocation statement (\texttt{I.allocRef t r v})
 is translated by:
 
 \begin{enumerate}
-  \item Lookup the variable \texttt{v} in the current environment.
+  \item Look up the variable \texttt{v} in the current environment.
   \item Extend the stack with the value of the variable \texttt{v}.
   \item Extend the environment with the variable \texttt{r} as the reference to the new stack allocation.
 \end{enumerate}

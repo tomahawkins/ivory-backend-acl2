@@ -18,22 +18,21 @@ import Ivory.Compile.ACL2
 import Ivory.Opts.Asserts
 import Ivory.Opts.Index
 
-import RingBuffer
-
 main :: IO ()
 main = do
   -- Tests of assertion optimization, i.e. verification and removal of assertions.
-  _ <- assertsFold [Progress, Failure] {-, VC, VCOpt, ACL2, ACL2Result] -} $ map optimizeModule
+  _ <- assertsFold [Progress, Failure, VC, VCOpt, ACL2] {-, VC, VCOpt, ACL2, ACL2Result] -} $ map optimizeModule
     [ package "assertsFoldTest" $ do 
-        incl factorial
-        incl intrinsicTest
-        incl wait
-        incl waitLoop
-        incl loopTest
-        incl structTest
-        incl arrayTest
-        incl retractLandingGear
-        incl commandLandingGearUp
+        --incl factorial
+        -- incl intrinsicTest
+        -- incl wait
+        -- incl waitLoop
+        -- incl loopTest
+        -- incl structTest
+        -- incl arrayTest
+        -- incl retractLandingGear
+        -- incl commandLandingGearUp
+        incl openValveA
     ]
 
   -- Tests of Ivory-to-ACL2 compilation.
@@ -212,4 +211,24 @@ arrayTest = proc "arrayTest" $ ensures (==? 6) $ body $ do
   -- Return the computed sum.
   deref sum >>= ret
 
+
+openValveA :: Def ('[Ref s (Stored IBool), Ref s (Stored IBool)] :-> ())
+openValveA = proc "openValveA" $ \ valveOpenA valveOpenB ->
+  -- Require that valve B must first be closed.
+  requires (checkStored valveOpenB $ iNot) $
+  -- Require that valveOpenA and valveOpenB are different references.
+  requires (checkStored valveOpenA $ \ a -> checkStored valveOpenB $ \ b -> a /=? b) $
+  -- Ensures that valve A is opened.
+  ensures (const $ checkStored valveOpenA id) $
+  -- Ensures that valve B remains closed.
+  ensures (const $ checkStored valveOpenB iNot) $
+  body $ do
+    -- Open valve A.
+    store valveOpenA true
+    retVoid
+
+closeValveA :: Def ('[Ref s (Stored IBool), Ref s (Stored IBool)] :-> ())
+closeValveA = proc "closeValveA" $ \ valveOpenA valveOpenB -> body $ do
+  store valveOpenA false
+  retVoid
 

@@ -40,22 +40,28 @@ assertsFold reports modules = mapM analyzeModule modules
     analyzeProc :: I.Proc -> IO I.Proc
     analyzeProc proc = do
       (p, _) <- runStateT init $ comment' (printf "Procedure: %s(%s)" (I.procSym proc) $ intercalate ", " [ var $ I.tValue a | a <- I.procArgs proc ]) $ do
-        newStack $ const $ Array []  -- Start with an empty stack.  Starting with a free stack sometimes cause problems for proofs.
+        newFree  >>= newStack . const
+        getStack >>= addLemma . isArray
         comment' "Procedure arguments and initial environment." $ do
-          argVars <- mapM newArg $ I.procArgs proc
-          newEnv $ Record [ (a, b) | (a, b) <- zip args argVars ]
+          sequence [ do { b <- newFree; return (a, b) } | a <- args ] >>= newEnv . Record
+          mapM_ argType $ zip args $ I.procArgs proc
         comment' "Assuming requires." $ mapM_ assumeRequire $ I.procRequires proc
         body <- comment' "Procedure body. " $ block $ I.procBody proc
         ensures <- comment' "Checking ensures." $ mapM checkEnsure (I.procEnsures proc) >>= return . catMaybes
         return $ proc { I.procBody = body, I.procEnsures = ensures }
       return p
       where
-      newArg a = do
-        a' <- newFree
+      argType (name, a) = do
+        a' <- lookupEnv name
+        stack <- getStack
         case I.tType a of
           I.TyInt   _ -> addLemma $ isInt a'
           I.TyWord  _ -> addLemma $ isInt a'
           I.TyIndex _ -> addLemma $ isInt a'
+          I.TyRef   _ -> do
+            addLemma $ isInt a'
+            addLemma $ (a' >=. 0)
+            addLemma $ (a' <. (length' stack))
           _ -> return ()
         return a'
       args = map (var . I.tValue) $ I.procArgs proc
@@ -209,6 +215,12 @@ getStack :: V Expr
 getStack = do
   m <- get
   return $ stack m
+
+-- Set the current stack.
+setStack :: Expr -> V ()
+setStack a = do
+  m <- get
+  set m { stack = a }
 
 -- Extends the stack, returns pointer (index) to added stack.
 extendStack :: Expr -> V Expr
@@ -527,7 +539,7 @@ acl2 a = case a of
     Negate  -> 0 - (expr a)
     Abs     -> A.if' (expr a A.>=. 0) (expr a) (0 - (expr a))
     Signum  -> A.if' (expr a A.>. 0) 1 $ A.if' (expr a A.<. 0) (-1) 0
-    IsArray -> A.or' (A.equal A.nil $ expr a) (A.consp $ expr a)
+    IsArray -> A.consp $ expr a   -- Arrays can't be zero length.  A.or' (A.equal A.nil $ expr a) (A.consp $ expr a)
     IsInt   -> A.integerp $ expr a
   BinOp op a b -> op' (expr a) (expr b)
     where
@@ -537,7 +549,9 @@ acl2 a = case a of
       Implies -> A.implies
       Eq      -> A.equal
       Lt      -> (A.<.)
+      Le      -> (A.<=.)
       Gt      -> (A.>.)
+      Ge      -> (A.>=.)
       Add     -> (+)
       Sub     -> (-)
       Mul     -> (*)
