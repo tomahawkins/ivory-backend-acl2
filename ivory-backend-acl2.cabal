@@ -18,6 +18,7 @@ library
     process  >= 1.1,
     monadLib >= 3.7.2,
     acl2     >= 0.0.1,
+    dove     == 0.0.0,
     ivory
   exposed-modules:
     Ivory.Compile.ACL2
@@ -29,7 +30,6 @@ library
     Ivory.Compile.ACL2.Expr
     Ivory.Compile.ACL2.RecTopoSort
     Ivory.Opts.Asserts
-    Ivory.Opts.Asserts.VC
   hs-source-dirs: src
   ghc-options: -W
 

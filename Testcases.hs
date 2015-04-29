@@ -21,25 +21,27 @@ import Ivory.Opts.Index
 main :: IO ()
 main = do
   -- Tests of assertion optimization, i.e. verification and removal of assertions.
-  _ <- assertsFold [Progress, Failure, VC, VCOpt, ACL2] {-, VC, VCOpt, ACL2, ACL2Result] -} $ map optimizeModule
+  _ <- assertsFold [Progress, Failure] {-, VC, VCOpt, ACL2, ACL2Result]-} $ map optimizeModule
     [ package "assertsFoldTest" $ do 
         --incl factorial
-        -- incl intrinsicTest
-        -- incl wait
-        -- incl waitLoop
-        -- incl loopTest
-        -- incl structTest
-        -- incl arrayTest
-        -- incl retractLandingGear
-        -- incl commandLandingGearUp
-        incl openValveA
+        --incl intrinsicTest
+        --incl wait
+        --incl waitLoop
+        --incl loopTest
+        incl structTest
+        --incl arrayTest
+        --incl retractLandingGear
+        --incl commandLandingGearUp
+        --incl openValveA
     ]
 
   -- Tests of Ivory-to-ACL2 compilation.
-  testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
-  testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
-  testThm "loopTest  8 ==  8" loopTest   $ A.equal  8 $ A.cdr $ A.call "loopTest"   [A.nil, 8]
-  testThm "structTest  == 22" structTest $ A.equal 22 $ A.cdr $ A.call "structTest" [A.nil]
+  --testThm "factorial 4 == 24" factorial  $ A.equal 24 $ A.cdr $ A.call "factorial"  [A.nil, 4]
+  --testThm "arrayTest   ==  6" arrayTest  $ A.equal  6 $ A.cdr $ A.call "arrayTest"  [A.nil]
+  --testThm "loopTest  8 ==  8" loopTest   $ A.equal  8 $ A.cdr $ A.call "loopTest"   [A.nil, 8]
+  --testThm "structTest  == 22" structTest $ A.equal 22 $ A.cdr $ A.call "structTest" [A.nil]
+
+  return ()
   where
   testThm name func thm = do
     pass <- A.check $ compile (package name $ incl func) ++ [A.thm thm]
@@ -217,7 +219,7 @@ openValveA = proc "openValveA" $ \ valveOpenA valveOpenB ->
   -- Require that valve B must first be closed.
   requires (checkStored valveOpenB $ iNot) $
   -- Require that valveOpenA and valveOpenB are different references.
-  requires (checkStored valveOpenA $ \ a -> checkStored valveOpenB $ \ b -> a /=? b) $
+  requires (refToPtr valveOpenA /=? refToPtr valveOpenB) $
   -- Ensures that valve A is opened.
   ensures (const $ checkStored valveOpenA id) $
   -- Ensures that valve B remains closed.

@@ -165,16 +165,16 @@ Also, Dove has a conditional expression and a handful of unary and binary operat
 \section{Translating Ivory to Dove VCs}
 
 Before we give a detailed account of the translation process, it helps to see an 
-example of how an Ivory procedure is translated into Dove VCs.
-We assume we have a system that
+example of how Ivory procedures are translated into Dove VCs.
+In this example we assume a system that
 controls two software actuated valves: valve A and valve B.
 The system has a safety property that states the two valves cannot be open
 at the same time.  The Ivory function (\texttt{openValveA})
-shown in figure \ref{fig:openValveA} commands valve A open.
-As inputs,
-it takes two references that represents the states of valve A and B.
+shown in figure \ref{fig:openValveA} is the means to command valve A open.
+As inputs, \texttt{openValveA} takes two references that
+represents the states of both valve A and B.
 To adhear to the safety property, a pre-condition on \texttt{openValveA}
-requires that valve B must first be closed.  Also, the post-conditions state
+requires that valve B must first be closed.  The post-conditions state
 that \texttt{openValveA} will result in valve A being open and valve B remaining closed.
 An addition pre-condition is need to ensure that the two state references
 are different.
@@ -182,12 +182,12 @@ If they were the same, the function would result in both valves being open,
 which would fail the post-condition requirement.
 
 In this example, the first VC checked is the first post-condition
-of \texttt{openValveA}.  Figure \ref{fig:openValveAVC1} shows this VC
-translated to Dove.
+of \texttt{openValveA}: that valve A will be opened.
+Figure \ref{fig:openValveAVC1} shows this VC translated to Dove.
 Prior to translating to ACL2, Dove optimizes the VC
 to that shown in figure \ref{fig:openValveAVC1Opt}.
-At this point, Dove is then translated to ACL2 as
-show in figure \ref{fig:openValveAVC1ACL2}.
+At this point, Dove is then translated to ACL2 listed
+in figure \ref{fig:openValveAVC1ACL2}, which ACL2 easily verifies.
 
 \begin{figure} 
   \caption{Ivory Function \texttt{openValveA}}
@@ -201,8 +201,7 @@ openValveA = proc "openValveA" $ \ valveOpenA valveOpenB ->
   requires (checkStored valveOpenB $ iNot) $
 
   -- Require that valveOpenA and valveOpenB are different references.
-  requires (checkStored valveOpenA $ \ a ->
-            checkStored valveOpenB $ \ b -> a /=? b) $
+  requires (retToPtr valveOpenA /=? refToPtr valveOpenB) $
 
   -- Ensures that valve A is opened.
   ensures (const $ checkStored valveOpenA id) $
@@ -228,7 +227,8 @@ let stack0 = free0 in
 -- Assume the initial stack is an array type.
 let assume0 = (true implies (isArray stack0)) in
 
--- Create the initial environment from the procedure arguments (the two refs).
+-- Create the initial environment from the procedure's
+-- arguments, i.e. the two valve state references.
 forall free1 in
 forall free2 in
 let env0 = {var0 = free1, var1 = free2} in
@@ -248,24 +248,22 @@ let assume7 = (true implies (not env1.pre0)) in
 
 -- Assume the second pre-condition, i.e. valve A and B are
 -- different references.
-let env2 = (overlay {pre1 = stack0[env1.var0]} env1) in
-let env3 = (overlay {pre2 = stack0[env2.var1]} env2) in
-let assume8 = (true implies (not (env3.pre1 eq env3.pre2))) in
+let assume8 = (true implies (not (env1.var0 eq env1.var1))) in
 
 -- Update the valve A state, i.e. set it to open (true).
-let stack1 = (update env3.var0 true stack0) in
+let stack1 = (update env1.var0 true stack0) in
 
 -- Define the first VC, i.e. that valve A is open.
-let env4 = (overlay {pre3 = stack1[env3.var0]} env3) in
-let vc0 = (true implies env4.pre3) in
+let env2 = (overlay {pre1 = stack1[env1.var0]} env1) in
+let vc0 = (true implies env2.pre1) in
 
 -- Construct the final check with all the assumptions included.
 ((((((((((true and assume0) and assume1) and assume2) and assume3)
-               and assume4) and assume5) and assume6) and assume7)
-               and assume8)
-          implies vc0)
+    and assume4) and assume5) and assume6) and assume7) and assume8)
+  implies vc0)
   \end{lstlisting}
 \end{figure}
+
 
 \begin{figure}
   \caption{Optimzed Dove VC}
@@ -277,7 +275,7 @@ forall free2 in
 ((((((((((isArray free0) and (isInt free1)) and (free1 ge 0))
   and (free1 lt (arrayLength free0))) and (isInt free2))
   and (free2 ge 0)) and (free2 lt (arrayLength free0)))
-  and (not free0[free2])) and (not (free0[free1] eq free0[free2])))
+  and (not free0[free2])) and (not (free1 eq free2)))
   implies (update free1 true free0)[free1])
   \end{lstlisting}
 \end{figure}
@@ -297,7 +295,7 @@ forall free2 in
       ( >= free2 0)
       ( < free2 ( len free0))
       ( not ( nth free2 free0))
-      ( not ( equal ( nth free1 free0) ( nth free2 free0)))
+      ( not ( equal free1 free2))
     )
     ( nth free1 ( update-nth free1 t free0))
   )
